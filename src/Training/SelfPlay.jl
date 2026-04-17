@@ -14,8 +14,8 @@ function _model_select_move(model::CassandraModel, board::Bobby.Board)::Union{Bo
 
     # score each legal move by its policy logit
     scores = map(legal.moves) do m
-        uci = Bobby.moveToUCI(m)
-        get(UCI2IDX, uci, 0) == 0 ? -Inf32 : logits[UCI2IDX[uci]]
+        idx = get(UCI2IDX, Bobby.moveToUCI(m), 0)
+        idx == 0 ? -Inf32 : logits[idx]
     end
 
     # softmax sample

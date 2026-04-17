@@ -24,7 +24,7 @@ include("Training/Imitation.jl")
 include("Training/SelfPlay.jl")
 include("Training/Trainer.jl")
 
-export select_move, apply_moves, apply_uci_move
+export apply_moves, select_move
 export CassandraModel, build_model, forward, save_model, load_model
 export UCI_MOVES, UCI2IDX, N_MOVES
 export DatasetWriter, write_record!, close_dataset, DatasetReader, batch_iterator

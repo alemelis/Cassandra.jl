@@ -6,7 +6,7 @@ struct CassandraModel
     policy_head::Flux.Chain
 end
 
-Flux.@functor CassandraModel (trunk, value_head, policy_head)
+Flux.@layer CassandraModel
 
 function build_model()
     trunk = Flux.Chain(
@@ -29,14 +29,17 @@ function (m::CassandraModel)(x::AbstractVecOrMat)
     return m.value_head(h), m.policy_head(h)
 end
 
-function board_to_input(board::Bobby.Board)::Vector{Float32}
-    buf = zeros(Float32, 8, 8, Bobby.N_PLANES)
+@inline _fresh_buf() = Array{Float32,3}(undef, 8, 8, Bobby.N_PLANES)
+
+function board_to_input!(buf::Array{Float32,3}, board::Bobby.Board)
     Bobby.board_to_tensor!(buf, board)
     return vec(buf)
 end
 
-function forward(m::CassandraModel, board::Bobby.Board)
-    x = board_to_input(board)
+board_to_input(board::Bobby.Board) = board_to_input!(_fresh_buf(), board)
+
+function forward(m::CassandraModel, board::Bobby.Board, buf::Array{Float32,3}=_fresh_buf())
+    x = board_to_input!(buf, board)
     value_vec, logits = m(x)
     return Float32(only(value_vec)), logits
 end
