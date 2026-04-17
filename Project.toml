@@ -8,18 +8,15 @@ Bobby = "bd34264e-e812-11e8-1ee8-bfb20fea2fb4"
 BongCloud = "20044d60-3a24-43ac-9e79-7192f8ed3dce"
 DotEnv = "4dc1fcf4-5e3b-5448-94ab-0c38ec0385c1"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-
-[weakdeps]
-Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
-
-[extensions]
-CassandraFluxExt = "Flux"
 
 [compat]
 Bobby = "1.1.1"
 BongCloud = "0.1.0"
 DotEnv = "1.0.0"
+Flux = "0.16.9"
+JLD2 = "0.6.4"
 Random = "1.11.0"
 julia = "1.11"
 

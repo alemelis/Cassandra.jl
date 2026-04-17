@@ -11,6 +11,15 @@ using Cassandra
 const BOT_TOKEN = get(ENV, "LICHESS_TOKEN", "")
 isempty(BOT_TOKEN) && error("Set LICHESS_TOKEN environment variable")
 
+const MODEL_PATH = get(ENV, "CASSANDRA_MODEL", "")
+const MODEL = if isempty(MODEL_PATH)
+    @info "No model found — building random model"
+    Cassandra.build_model()
+else
+    @info "Loading model from $MODEL_PATH"
+    Cassandra.load_model(MODEL_PATH)
+end
+
 function handle_position(client::LichessClient, game_id::String,
                          fen::String, moves_str::String, my_color::Symbol)
     board = Cassandra.apply_moves(moves_str, fen)
@@ -18,7 +27,7 @@ function handle_position(client::LichessClient, game_id::String,
                  (!board.active && my_color == :black)
     is_my_turn || return
 
-    move = Cassandra.select_move(board)
+    move = Cassandra.select_move(MODEL, board)
     if isnothing(move)
         @info "[$game_id] No legal moves — resigning"
         BongCloud.resign_game(client, game_id)

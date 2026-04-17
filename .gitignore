@@ -28,5 +28,5 @@ LocalPreferences.toml
 JuliaLocalPreferences.toml
 
 # vibes
-PLAN.md
+*PLAN.md
 bot/.env
