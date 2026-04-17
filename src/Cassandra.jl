@@ -1,6 +1,7 @@
 module Cassandra
 
 using Bobby
+using Random
 
 # Search
 include("Search/TT.jl")
@@ -17,6 +18,6 @@ include("Training/Imitation.jl")
 include("Training/SelfPlay.jl")
 include("Training/Trainer.jl")
 
-export select_move
+export select_move, apply_moves, apply_uci_move
 
 end # module Cassandra

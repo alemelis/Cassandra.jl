@@ -1,3 +1,1 @@
-module SelfPlay
-
-end
+# Self-play — stub

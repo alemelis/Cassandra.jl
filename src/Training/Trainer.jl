@@ -1,3 +1,1 @@
-module Trainer
-
-end
+# Training loop — stub

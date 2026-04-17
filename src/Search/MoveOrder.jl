@@ -1,3 +1,1 @@
-module MoveOrder
-
-end
+# Move ordering — stub

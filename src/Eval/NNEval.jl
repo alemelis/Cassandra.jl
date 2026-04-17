@@ -1,3 +1,1 @@
-module NNEval
-
-end
+# Neural network eval — stub

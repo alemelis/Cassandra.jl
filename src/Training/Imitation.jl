@@ -1,3 +1,1 @@
-module Imitation
-
-end
+# Imitation learning — stub

@@ -1,3 +1,1 @@
-module Classical
-
-end
+# Classical hand-crafted eval — stub

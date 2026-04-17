@@ -1,3 +1,1 @@
-module TT
-
-end
+# Transposition table — stub

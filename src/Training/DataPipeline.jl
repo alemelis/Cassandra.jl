@@ -1,3 +1,1 @@
-module DataPipeline
-
-end
+# Data pipeline — stub

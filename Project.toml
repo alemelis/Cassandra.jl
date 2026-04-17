@@ -5,7 +5,10 @@ version = "0.1.0"
 
 [deps]
 Bobby = "bd34264e-e812-11e8-1ee8-bfb20fea2fb4"
+BongCloud = "20044d60-3a24-43ac-9e79-7192f8ed3dce"
+DotEnv = "4dc1fcf4-5e3b-5448-94ab-0c38ec0385c1"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 
 [weakdeps]
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
@@ -14,13 +17,16 @@ Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 CassandraFluxExt = "Flux"
 
 [compat]
-julia = "1.11"
 Bobby = "1.1.1"
+BongCloud = "0.1.0"
+DotEnv = "1.0.0"
+Random = "1.11.0"
+julia = "1.11"
 
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Test = "8dfed614-e22c-358a-f054-384c75a4b29c"
 
 [targets]
-test = ["Test"]
 bench = ["BenchmarkTools"]
+test = ["Test"]
