@@ -29,4 +29,11 @@ JuliaLocalPreferences.toml
 
 # vibes
 *PLAN.md
+.env
 bot/.env
+*plan.md
+checkpoints/*
+data/*
+dashboard/*.json*
+logs/
+ideas.md
