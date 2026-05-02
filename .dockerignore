@@ -1,0 +1,9 @@
+data/
+checkpoints/
+logs/
+.git/
+benchmark/
+test/
+docs/
+*.md
+.env

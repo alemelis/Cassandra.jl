@@ -1,4 +1,5 @@
 using Dates: now
+using Printf
 
 struct TrainStats
     loss_value::Float32
@@ -12,9 +13,8 @@ end
     train_epoch!(model, opt_state, dataset_path; kwargs...) -> TrainStats
 
 Runs one epoch. Combined loss = `value_weight*MSE + policy_weight*CE`.
-
-If `checkpoint_path` is given, saves the model at the end.
-If `log_path` is given, appends one JSON line with epoch stats.
+Saves a checkpoint if `checkpoint_path` is given.
+Appends one JSON line to `log_path` if given.
 """
 function train_epoch!(model::CassandraModel, opt_state, dataset_path::AbstractString;
                       batch_size::Int=256,
@@ -26,10 +26,12 @@ function train_epoch!(model::CassandraModel, opt_state, dataset_path::AbstractSt
     reader = DatasetReader(dataset_path)
     reader.n_records == 0 && error("Empty dataset: $dataset_path")
 
+    Flux.trainmode!(model)
+    n_batches_total = ceil(Int, reader.n_records / batch_size)
     total_lv = 0f0; total_lp = 0f0; nb = 0
     t0 = time()
 
-    for (tensors, values, policy_idxs) in batch_iterator(reader, batch_size)
+    for (tensors, values, policy_idxs) in batch_iterator(reader, batch_size; shuffle=false)
         targets = Flux.onehotbatch(policy_idxs, 1:N_MOVES)
 
         (total, (lv, lp)), grads = Flux.withgradient(model) do m
@@ -41,7 +43,17 @@ function train_epoch!(model::CassandraModel, opt_state, dataset_path::AbstractSt
         Flux.update!(opt_state, model, grads[1])
 
         total_lv += lv; total_lp += lp; nb += 1
+
+        if nb % 200 == 0
+            elapsed = time() - t0
+            eta = elapsed / nb * (n_batches_total - nb)
+            @printf("\r  [%d/%d]  loss=%.4f  elapsed=%.0fs  eta=%.0fs    ",
+                    nb, n_batches_total, total_lp / nb, elapsed, eta)
+            flush(stdout)
+        end
     end
+    nb > 0 && print("\r" * " "^80 * "\r")
+    Flux.testmode!(model)
 
     stats = TrainStats(total_lv/nb, total_lp/nb,
                        (value_weight*total_lv + policy_weight*total_lp)/nb,
@@ -50,17 +62,15 @@ function train_epoch!(model::CassandraModel, opt_state, dataset_path::AbstractSt
     checkpoint_path === nothing || save_model(checkpoint_path, model)
 
     if log_path !== nothing
-        line = string("{\"ts\":\"", now(),
-                      "\",\"epoch\":", epoch,
-                      ",\"n_batches\":", stats.n_batches,
-                      ",\"seconds\":", round(stats.seconds; digits=3),
-                      ",\"loss_value\":", stats.loss_value,
-                      ",\"loss_policy\":", stats.loss_policy,
-                      ",\"loss_total\":", stats.loss_total,
-                      ",\"batch_size\":", batch_size,
-                      ",\"n_records\":", reader.n_records,
-                      "}\n")
-        open(log_path, "a") do io; write(io, line); end
+        entry = (ts=string(now()), epoch=epoch, n_batches=stats.n_batches,
+                 seconds=round(stats.seconds; digits=3),
+                 loss_value=stats.loss_value, loss_policy=stats.loss_policy,
+                 loss_total=stats.loss_total, batch_size=batch_size,
+                 n_records=reader.n_records)
+        open(log_path, "a") do io
+            JSON3.write(io, entry)
+            println(io)
+        end
     end
 
     return stats
