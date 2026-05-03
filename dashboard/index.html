@@ -187,6 +187,8 @@
         .badge.draw { background: rgba(136,135,128,0.18); color: var(--text-muted); }
         .badge.deployed { background: transparent; border: 1px solid var(--green); color: var(--green); font-weight: 500; }
         .badge.training { background: transparent; border: 1px solid var(--accent); color: var(--accent); font-weight: 500; }
+        .badge.badge-ok   { background: rgba(93,202,165,0.18); color: var(--green); }
+        .badge.badge-warn { background: rgba(224,112,64,0.18); color: var(--red); }
 
         /* Buttons */
         .btn {
@@ -464,7 +466,7 @@
                 </div>
                 <div class="field">
                     <label>Trunk sizes</label>
-                    <input type="text" id="t-trunk" value="256, 256" />
+                    <input type="text" id="t-trunk" value="256,128" />
                 </div>
                 <div class="field">
                     <label>Dropout</label>
@@ -472,15 +474,19 @@
                 </div>
                 <div class="field">
                     <label>Epochs</label>
-                    <input type="number" id="t-epochs" value="100" min="1" />
+                    <input type="number" id="t-epochs" value="20" min="1" />
                 </div>
                 <div class="field">
                     <label>Batch size</label>
-                    <input type="number" id="t-batch" value="4096" min="64" />
+                    <input type="number" id="t-batch" value="512" min="64" />
                 </div>
                 <div class="field">
                     <label>Learning rate</label>
-                    <input type="text" id="t-lr" value="1e-3" />
+                    <input type="text" id="t-lr" value="3e-4" />
+                </div>
+                <div class="field">
+                    <label>LR min (cosine)</label>
+                    <input type="text" id="t-lr-min" value="3e-6" />
                 </div>
                 <div class="field">
                     <label>Weight decay</label>
@@ -705,9 +711,11 @@ function renderTrainerNav() {
 function renderLossChart() {
     const e = state.trainLog;
     if (!e.length) return;
-    const epochs = e.map(x => x.epoch);
-    const losses = e.map(x => x.loss_policy);
-    const times  = e.map(x => x.seconds);
+    const epochs       = e.map(x => x.epoch);
+    const losses       = e.map(x => x.loss_policy);
+    const valueLosses  = e.map(x => x.loss_value ?? null);
+    const hasValue     = valueLosses.some(v => v != null && v > 0);
+    const times        = e.map(x => x.seconds);
     const depEpoch = state.deployed ? state.deployed.epoch : null;
 
     if (depEpoch != null) $('dep-legend').style.display = 'inline';
@@ -731,8 +739,9 @@ function renderLossChart() {
             plugins: [plugin],
             type: 'line',
             data: { labels: epochs, datasets: [
-                { label: 'Loss', data: losses, borderColor: '#534AB7', backgroundColor: 'rgba(83,74,183,0.1)', fill: true, tension: 0.3, pointRadius: 2, yAxisID: 'y' },
-                { label: 's/epoch', data: times, borderColor: '#888780', borderDash: [5,5], pointRadius: 1, fill: false, tension: 0.3, yAxisID: 'y1' },
+                { label: 'Policy loss', data: losses,      borderColor: '#534AB7', backgroundColor: 'rgba(83,74,183,0.1)', fill: true,  tension: 0.3, pointRadius: 2, yAxisID: 'y' },
+                { label: 'Value loss',  data: valueLosses, borderColor: '#e07040', backgroundColor: 'rgba(224,112,64,0.1)', fill: false, tension: 0.3, pointRadius: 2, yAxisID: 'y', hidden: !hasValue },
+                { label: 's/epoch',     data: times,       borderColor: '#888780', borderDash: [5,5], pointRadius: 1, fill: false, tension: 0.3, yAxisID: 'y1' },
             ]},
             options: {
                 responsive: true, maintainAspectRatio: false,
@@ -742,13 +751,15 @@ function renderLossChart() {
                     y: { position: 'left', ticks: { color: '#888780' }, grid: { color: 'rgba(255,255,255,0.05)' } },
                     y1: { position: 'right', beginAtZero: true, ticks: { color: '#888780' }, grid: { drawOnChartArea: false } },
                 },
-                plugins: { legend: { display: false } },
+                plugins: { legend: { display: true, labels: { color: '#888780', boxWidth: 12, font: { size: 11 } } } },
             },
         });
     } else {
         lossChart.data.labels = epochs;
         lossChart.data.datasets[0].data = losses;
-        lossChart.data.datasets[1].data = times;
+        lossChart.data.datasets[1].data = valueLosses;
+        lossChart.data.datasets[1].hidden = !hasValue;
+        lossChart.data.datasets[2].data = times;
         lossChart.update();
     }
 }
@@ -919,17 +930,21 @@ function renderDatasets() {
     }
     const rows = list.map(d => {
         const recs = d.n_records ? `${(d.n_records/1e6).toFixed(2)}M records` : '—';
+        const ver  = d.version != null ? `v${d.version}` : '—';
+        const masked = d.version >= 2;
+        const verBadge = `<span class="badge ${masked ? 'badge-ok' : 'badge-warn'}" title="${masked ? 'legal-move masking' : 'no legal-move masking — regenerate'}">${ver}</span>`;
         return `<tr>
             <td class="mono">${escapeHtml(d.name)}</td>
             <td class="muted">${escapeHtml(d.file || '')}</td>
             <td class="muted">${recs}</td>
+            <td>${verBadge}</td>
             <td style="text-align:right">
                 <button class="btn danger" onclick="deleteDataset('${d.name}')">Delete</button>
             </td>
         </tr>`;
     }).join('');
     $('ds-wrap').innerHTML = `<table>
-        <thead><tr><th>Name</th><th>File</th><th>Size</th><th></th></tr></thead>
+        <thead><tr><th>Name</th><th>File</th><th>Size</th><th>Format</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table>`;
 
     // Populate train form dataset select
@@ -1036,6 +1051,7 @@ async function startTraining() {
         epochs:       parseInt($('t-epochs').value),
         batch_size:   parseInt($('t-batch').value),
         lr:           $('t-lr').value,
+        lr_min:       $('t-lr-min').value,
         weight_decay: parseFloat($('t-wd').value),
         value_weight: parseFloat($('t-vw').value),
         eval_games:   parseInt($('t-eval').value),

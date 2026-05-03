@@ -287,14 +287,15 @@ def _start_trainer(params):
         'CHECKPOINTS_DIR': '/data/checkpoints',
         'LOGS_DIR':        '/data/logs',
         'DATA_PATH':       f'/app/data/{dataset_file}',
-        'EPOCHS':          str(params.get('epochs',       50)),
-        'BATCH_SIZE':      str(params.get('batch_size',   2048)),
-        'LR':              str(params.get('lr',           '1e-3')),
+        'EPOCHS':          str(params.get('epochs',       20)),
+        'BATCH_SIZE':      str(params.get('batch_size',   512)),
+        'LR':              str(params.get('lr',           '3e-4')),
+        'LR_MIN':          str(params.get('lr_min',       '3e-6')),
         'EVAL_GAMES':      str(params.get('eval_games',   0)),
         'VALUE_WEIGHT':    str(params.get('value_weight', 0.0)),
-        'WEIGHT_DECAY':    str(params.get('weight_decay', 0.0)),
+        'WEIGHT_DECAY':    str(params.get('weight_decay', '1e-4')),
         'TRUNK_SIZES':     params.get('trunk_sizes', '256,128'),
-        'DROPOUT':         str(params.get('dropout',      0.0)),
+        'DROPOUT':         str(params.get('dropout',      0.1)),
     }
     base_model = params.get('base_model', '').strip()
     if base_model:

@@ -119,7 +119,8 @@ function search(model::CassandraModel, board::Bobby.Board;
     return Bobby.moveToUCI(best_move)
 end
 
-# Bot entry point: run alpha-beta search and return a UCI move string.
+# Bot entry point: alpha-beta search with material eval at leaves.
+# Swap material_eval → value_eval once the value head is trained.
 function select_move(model::CassandraModel, board::Bobby.Board)::Union{String,Nothing}
     return search(model, board)
 end

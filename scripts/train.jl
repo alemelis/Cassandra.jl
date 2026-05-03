@@ -30,10 +30,11 @@ const CSV_PATH      = get(ENV, "CSV_PATH",  get(ARGS, 1, joinpath(@__DIR__, ".."
 const DATA_PATH     = get(ENV, "DATA_PATH", get(ARGS, 2, joinpath(@__DIR__, "..", "data", "puzzles.bin")))
 
 # Training schedule
-const N_EPOCHS      = parse(Int,     get(ENV, "EPOCHS",       "50"))
-const BATCH         = parse(Int,     get(ENV, "BATCH_SIZE",   "2048"))
-const LR            = parse(Float32, get(ENV, "LR",           "1e-3"))
-const WEIGHT_DECAY  = parse(Float32, get(ENV, "WEIGHT_DECAY", "0.0"))
+const N_EPOCHS      = parse(Int,     get(ENV, "EPOCHS",       "20"))
+const BATCH         = parse(Int,     get(ENV, "BATCH_SIZE",   "512"))
+const LR            = parse(Float32, get(ENV, "LR",           "3e-4"))
+const LR_MIN        = parse(Float32, get(ENV, "LR_MIN",       "3e-6"))   # cosine decay floor
+const WEIGHT_DECAY  = parse(Float32, get(ENV, "WEIGHT_DECAY", "1e-4"))
 const EVAL_GAMES    = parse(Int,     get(ENV, "EVAL_GAMES",   "0"))
 
 # Loss weights
@@ -43,7 +44,7 @@ const POLICY_WEIGHT = 1f0 - VALUE_WEIGHT
 # Architecture (ignored when BASE_MODEL is set)
 const TRUNK_SIZES_STR = get(ENV, "TRUNK_SIZES", "256,128")
 const TRUNK_SIZES     = [parse(Int, s) for s in split(TRUNK_SIZES_STR, ',') if !isempty(strip(s))]
-const DROPOUT         = parse(Float32, get(ENV, "DROPOUT", "0.0"))
+const DROPOUT         = parse(Float32, get(ENV, "DROPOUT", "0.1"))
 
 const BASE_MODEL    = get(ENV, "BASE_MODEL", "")
 
@@ -88,15 +89,19 @@ else
     m
 end
 
-optimizer = WEIGHT_DECAY > 0f0 ?
-    Flux.AdamW(LR, (0.9, 0.999), WEIGHT_DECAY) :
-    Flux.Adam(LR)
+device = Flux.gpu_device()
+println("│  Device:       $device")
+model = model |> device
+
+optimizer = Flux.AdamW(LR, (0.9, 0.999), WEIGHT_DECAY)
 opt_state = Flux.setup(optimizer, model)
+
+cosine_lr(ep) = LR_MIN + 0.5f0 * (LR - LR_MIN) * (1f0 + cos(Float32(π) * (ep - 1) / N_EPOCHS))
 log_path  = joinpath(LOGS_DIR, "train_log.jsonl")
 isfile(log_path) && rm(log_path)
 
 print("Compiling model…")
-let dummy = rand(Float32, Cassandra.INPUT_SIZE, 1)
+let dummy = rand(Float32, Cassandra.INPUT_SIZE, 1) |> device
     Flux.withgradient(m -> sum(m(dummy)[2]), model)
 end
 println(" done.")
@@ -104,6 +109,7 @@ println(" done.")
 # ── Training ──────────────────────────────────────────────────────────────────
 
 for epoch in 1:N_EPOCHS
+    Flux.adjust!(opt_state, cosine_lr(epoch))
     stats = Cassandra.train_epoch!(
         model, opt_state, DATA_PATH;
         batch_size    = BATCH,
@@ -112,14 +118,15 @@ for epoch in 1:N_EPOCHS
         checkpoint_path = joinpath(CKPT_DIR, "latest.jld2"),
         log_path = log_path,
         epoch    = epoch,
+        device   = device,
     )
-    @printf("epoch %3d/%d | loss=%.4f | %d batches | %.1fs\n",
-            epoch, N_EPOCHS, stats.loss_policy, stats.n_batches, stats.seconds)
+    @printf("epoch %3d/%d | lr=%.2e | loss=%.4f | %d batches | %.1fs\n",
+            epoch, N_EPOCHS, cosine_lr(epoch), stats.loss_policy, stats.n_batches, stats.seconds)
     flush(stdout)
 end
 
 final_path = joinpath(CKPT_DIR, "$name.jld2")
-Cassandra.save_model(final_path, model)
+Cassandra.save_model(final_path, model |> Flux.cpu_device())
 println("\nSaved: $final_path")
 
 n_params = let ts = Vector{Int}(model.arch.trunk_sizes)
@@ -171,7 +178,7 @@ end
 
 if EVAL_GAMES > 0
     println("\nArena: $name vs random ($EVAL_GAMES games)…")
-    result = Cassandra.evaluate(model, Cassandra.build_model(), EVAL_GAMES)
+    result = Cassandra.evaluate(model |> Flux.cpu_device(), Cassandra.build_model(), EVAL_GAMES)
     @printf("  Wins: %d  Losses: %d  Draws: %d  ELO delta: %+.0f\n",
             result.wins_a, result.wins_b, result.draws, result.elo_delta)
 end
