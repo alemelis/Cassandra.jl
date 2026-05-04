@@ -97,11 +97,14 @@ function search(model::CassandraModel, board::Bobby.Board;
         alpha = -INF_SCORE
         beta  =  INF_SCORE
 
+        move_scores = Dict{Int16,Float32}()
+
         for i in order
             child = Bobby.makeMove(board, legal.moves[i])
             score = -_negamax(model, child, depth - 1, -beta, -alpha,
                               buf, Vector{Int16}(), deadline, seen)
             time() > deadline && break
+            move_scores[i] = score
             if score > iter_best_score
                 iter_best_score = score
                 iter_best_idx   = i
@@ -110,6 +113,25 @@ function search(model::CassandraModel, board::Bobby.Board;
         end
 
         time() > deadline && break
+
+        if iter_best_score <= 0f0
+            winning = Int16[]
+            drawing = Int16[]
+            for (i, score) in move_scores
+                if score > 0f0
+                    push!(winning, i)
+                elseif score == 0f0
+                    push!(drawing, i)
+                end
+            end
+            if !isempty(winning)
+                iter_best_idx = winning[1]
+                iter_best_score = 1f0
+            elseif !isempty(drawing)
+                iter_best_idx = drawing[1]
+                iter_best_score = 0f0
+            end
+        end
 
         best_move = legal.moves[iter_best_idx]
         filter!(x -> x != iter_best_idx, order)
