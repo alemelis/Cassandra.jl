@@ -78,7 +78,8 @@ function _mark_rate_limited(target::String; backoff=RATE_LIMIT_BACKOFF_BASE)
     @info "Rate limit backoff for $target"
 end
 
-const TC_ROTATION = [(60, 0), (60, 0), (120, 1), (120, 1)]
+const TC_ROTATION = [(60, 0), (60, 0), (180, 0), (180, 0), (180, 2), (180, 2), (600, 0), (600, 0)]
+# 2x bullet (60+0), 2x blitz (180+0), 2x rapid (180+2), 2x classical (600+0)
 const TC_INDEX    = Ref(1)
 
 function _next_tc()
