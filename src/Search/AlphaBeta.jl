@@ -141,8 +141,9 @@ function search(model::CassandraModel, board::Bobby.Board;
     return Bobby.moveToUCI(best_move)
 end
 
-# Bot entry point: alpha-beta search with material eval at leaves.
-# Swap material_eval → value_eval once the value head is trained.
-function select_move(model::CassandraModel, board::Bobby.Board)::Union{String,Nothing}
-    return search(model, board)
+# Bot entry point: check meme openings first, then alpha-beta search.
+function select_move(model::CassandraModel, board::Bobby.Board)::Tuple{Union{String,Nothing},Union{String,Nothing}}
+    (move, name) = meme_move(board)
+    move !== nothing && return (move, name)
+    return (search(model, board), nothing)
 end

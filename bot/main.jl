@@ -142,6 +142,8 @@ function _game_intro()
 end
 
 MODEL_REF[] = _load_model()
+Cassandra.init_meme_openings!()
+@info "Meme openings loaded ($(length(Cassandra.MEME_LINES)) positions)"
 
 function current_model()
     lock(MODEL_LOCK) do
@@ -500,18 +502,27 @@ end
 # ── Game handling ─────────────────────────────────────────────────────────────
 
 function handle_position(client::LichessClient, game_id::String,
-                         fen::String, moves_str::String, my_color::Symbol)
+                          fen::String, moves_str::String, my_color::Symbol)
     board = Cassandra.apply_moves(moves_str, fen)
     is_my_turn = (board.active && my_color == :white) ||
                  (!board.active && my_color == :black)
     is_my_turn || return
 
     model = current_model()
-    move  = Cassandra.select_move(model, board)
+    (move, opening_name) = Cassandra.select_move(model, board)
     if isnothing(move)
         @info "[$game_id] No legal moves — resigning"
         BongCloud.resign_game(client, game_id)
         return
+    end
+
+    # Announce meme opening in chat
+    if opening_name !== nothing
+        try
+            BongCloud.send_chat(client, game_id, "player", "Playing $opening_name!")
+        catch e
+            @warn "[$game_id] Chat failed" exception=e
+        end
     end
 
     try
@@ -520,14 +531,15 @@ function handle_position(client::LichessClient, game_id::String,
         open(joinpath(TRACES_DIR, "$game_id.jsonl"), "a") do io
             JSON3.write(io, (ply=n_prev, moves_before=moves_str, move=move,
                              value=round(v; digits=4),
-                             entropy=round(ent; digits=4), top5=top5))
+                             entropy=round(ent; digits=4), top5=top5,
+                             opening=opening_name))
             println(io)
         end
     catch e
         @warn "[$game_id] Trace write failed" exception=e
     end
 
-    @info "[$game_id] Playing $move"
+    @info "[$game_id] Playing $move $(opening_name !== nothing ? "($opening_name)" : "")"
     BongCloud.make_move(client, game_id, move)
 end
 

@@ -13,6 +13,7 @@ include("Eval/NNEval.jl")
 include("Search/TT.jl")
 include("Search/MoveOrder.jl")
 include("Search/AlphaBeta.jl")
+include("Book/MemeOpenings.jl")
 include("Training/DataPipeline.jl")
 include("Training/Imitation.jl")
 include("Training/SelfPlay.jl")
@@ -20,7 +21,9 @@ include("Training/Trainer.jl")
 
 export apply_moves, select_move, search, START_FEN, policy_info, material_eval
 export set_max_depth!, get_max_depth
+export init_meme_openings!, meme_move
 export CassandraModel, build_model, forward, save_model, load_model
+export MEME_NAMES
 export INPUT_SIZE, UCI_MOVES, UCI2IDX, N_MOVES
 export DatasetWriter, write_record!, close_dataset, DatasetReader, batch_iterator, make_batch
 export prepare_puzzles
