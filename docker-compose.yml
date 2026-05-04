@@ -26,6 +26,9 @@ services:
       - CHECKPOINTS_DIR=/data/checkpoints
       - LOGS_DIR=/data/logs
       - BOT_CONTROL_PORT=8080
+      - BOT_TARGETED_P=0.15
+      - BOT_MAX_OPENS=4
+      - BOT_MAX_GAMES=2
     volumes:
       - checkpoints:/data/checkpoints
       - logs:/data/logs

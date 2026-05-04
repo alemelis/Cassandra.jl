@@ -37,7 +37,48 @@ const CHALLENGE_PAUSED  = Ref(false)
 const PENDING_OUTGOING  = Dict{String,NamedTuple{(:target,:created_at),Tuple{String,DateTime}}}()
 const PENDING_LOCK      = ReentrantLock()
 
-const TC_ROTATION = [(60, 0), (120, 1), (180, 0), (180, 2), (300, 0)]
+# Track bots that have rate-limited us (429) with exponential backoff
+const RATE_LIMITED_BOTS = Dict{String,DateTime}()
+const RATE_LIMITED_LOCK = ReentrantLock()
+const RATE_LIMIT_BACKOFF_BASE = 60
+const RATE_LIMIT_MAX_BACKOFF  = 3600
+
+const API_RATE_LIMITED_UNTIL = Ref{Union{DateTime,Nothing}}(nothing)
+const API_RATE_LIMIT_LOCK = ReentrantLock()
+
+function _is_api_rate_limited()
+    API_RATE_LIMITED_UNTIL[] !== nothing && now() < API_RATE_LIMITED_UNTIL[]
+end
+
+function _mark_api_rate_limited(seconds::Int=120)
+    lock(API_RATE_LIMIT_LOCK) do
+        API_RATE_LIMITED_UNTIL[] = now() + Second(seconds)
+    end
+    @info "API rate limited for $seconds seconds"
+end
+
+function _is_rate_limited(target::String)
+    lock(RATE_LIMITED_LOCK) do
+        t = get(RATE_LIMITED_BOTS, target, nothing)
+        t === nothing && return false
+        now() < t ? true : false
+    end
+end
+
+function _mark_rate_limited(target::String; backoff=RATE_LIMIT_BACKOFF_BASE)
+    lock(RATE_LIMITED_LOCK) do
+        current = get(RATE_LIMITED_BOTS, target, nothing)
+        if current === nothing
+            RATE_LIMITED_BOTS[target] = now() + Second(backoff)
+        else
+            new_backoff = min(backoff * 2, RATE_LIMIT_MAX_BACKOFF)
+            RATE_LIMITED_BOTS[target] = now() + Second(new_backoff)
+        end
+    end
+    @info "Rate limit backoff for $target"
+end
+
+const TC_ROTATION = [(60, 0), (60, 0), (120, 1), (120, 1)]
 const TC_INDEX    = Ref(1)
 
 function _next_tc()
@@ -325,10 +366,16 @@ function _post_open(client::LichessClient)
 end
 
 function _post_targeted(client::LichessClient, my_name::String)
-    bots = try collect(BongCloud.get_online_bots(client)) catch; Any[]; end
+    bots = try
+        collect(BongCloud.get_online_bots(client))
+    catch e
+        e isa EOFError && return
+        @warn "get_online_bots failed" exception=e
+        return
+    end
     isempty(bots) && return
     my_rating = OWN_RATING[]
-    candidates = [b for b in bots if _eligible(b, my_name, my_rating)]
+    candidates = [b for b in bots if _eligible(b, my_name, my_rating) && !_is_rate_limited(_bot_name(b))]
     isempty(candidates) && return
     target = _bot_name(rand(candidates))
     limit, inc = _next_tc()
@@ -336,11 +383,38 @@ function _post_targeted(client::LichessClient, my_name::String)
     if status in (200, 201)
         @info "Challenged $target ($(limit÷60)+$(inc))"
     elseif status == 429
-        @info "429 targeting $target — backing off 60s"
-        sleep(60)
+        _mark_rate_limited(target)
     elseif status >= 400
-        @info "[$target] HTTP $status ($(limit÷60)+$(inc)): $(first(body, 120))"
+        @info "[$target] HTTP $status: $(first(body, 120))"
     end
+end
+
+function _cleanup_rate_limits()
+    now_ts = now()
+    lock(RATE_LIMITED_LOCK) do
+        for (k, v) in collect(RATE_LIMITED_BOTS)
+            now_ts >= v && delete!(RATE_LIMITED_BOTS, k)
+        end
+    end
+    lock(API_RATE_LIMIT_LOCK) do
+        API_RATE_LIMITED_UNTIL[] !== nothing && now_ts >= API_RATE_LIMITED_UNTIL[] && (API_RATE_LIMITED_UNTIL[] = nothing)
+    end
+end
+
+function challenge_bot(client::LichessClient, my_name::String)
+    try
+        _is_api_rate_limited() && return
+        _cleanup_rate_limits()
+        while _pending_open_count() < MAX_PENDING_OPENS
+            _post_open(client) || break
+        end
+        if _pending_direct_count() == 0 && rand() < TARGETED_PROB
+            _post_targeted(client, my_name)
+        end
+    catch e
+        @warn "Challenge loop error" exception=e
+    end
+end
 end
 
 function challenge_bot(client::LichessClient, my_name::String)
