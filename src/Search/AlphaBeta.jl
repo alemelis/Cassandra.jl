@@ -142,7 +142,7 @@ function search(model::CassandraModel, board::Bobby.Board;
 end
 
 # Bot entry point: check meme openings first, then alpha-beta search.
-function select_move(model::CassandraModel, board::Bobby.Board)::Tuple{Union{String,Nothing},Union{String,Nothing}}
+function select_move(model::CassandraModel, board::Bobby.Board)
     (move, name) = meme_move(board)
     move !== nothing && return (move, name)
     return (search(model, board), nothing)
