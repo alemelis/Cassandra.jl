@@ -98,6 +98,11 @@ const JOINED_ARENAS    = Set{String}()
 const ARENA_BLACKLIST  = Set{String}()
 const ARENA_LOCK       = ReentrantLock()
 
+const GAME_TC = Dict{String,Tuple{Int,Int}}()  # game_id -> (clock_limit, clock_increment)
+const GAME_TC_LOCK = ReentrantLock()
+
+const PREV_MOVES = Dict{String,String}()  # game_id -> previous moves string
+
 # ── Model loading ─────────────────────────────────────────────────────────────
 
 function _load_model()
@@ -252,7 +257,15 @@ function log_game(game_id, result, color, opponent, opponent_rating)
     epoch_field = epoch      !== nothing ? ",\"deployed_epoch\":$epoch"   : ""
     model_field = model_name !== nothing ? ",\"model\":\"$model_name\""   : ""
     opp_r = opponent_rating !== nothing ? opponent_rating : "null"
-    line = """{"ts":"$ts","game_id":"$game_id","result":"$result","color":"$color","opponent":"$opponent","opponent_rating":$opp_r$epoch_field$model_field}"""
+    
+    tc = nothing
+    lock(GAME_TC_LOCK) do
+        tc = get(GAME_TC, game_id, nothing)
+        tc !== nothing && delete!(GAME_TC, game_id)
+    end
+    tc_field = tc !== nothing ? ",\"clock_limit\":$(tc[1]),\"clock_increment\":$(tc[2])" : ""
+    
+    line = """{"ts":"$ts","game_id":"$game_id","result":"$result","color":"$color","opponent":"$opponent","opponent_rating":$opp_r$epoch_field$model_field$tc_field}"""
     open(BOT_LOG, "a") do io; println(io, line); end
 end
 
@@ -360,6 +373,9 @@ function _post_open(client::LichessClient)
         lock(PENDING_LOCK) do
             PENDING_OUTGOING[id] = (target="open", created_at=now())
         end
+        lock(GAME_TC_LOCK) do
+            GAME_TC[id] = (limit, inc)
+        end
         @info "Open challenge $id ($(limit÷60)+$(inc))"
         return true
     end
@@ -382,6 +398,9 @@ function _post_targeted(client::LichessClient, my_name::String)
     limit, inc = _next_tc()
     status, body = _try_create_challenge(client, target, limit, inc)
     if status in (200, 201)
+        lock(GAME_TC_LOCK) do
+            GAME_TC[String(body)] = (limit, inc)
+        end
         @info "Challenged $target ($(limit÷60)+$(inc))"
     elseif status == 429
         _mark_rate_limited(target)
@@ -516,9 +535,24 @@ function handle_position(client::LichessClient, game_id::String,
 
     try
         n_prev = isempty(strip(moves_str)) ? 0 : length(split(moves_str))
+        
+        prev_moves = get(PREV_MOVES, game_id, "")
+        opp_move = ""
+        if !isempty(prev_moves) && !isempty(moves_str)
+            p_words = split(strip(prev_moves))
+            c_words = split(strip(moves_str))
+            if length(c_words) > length(p_words)
+                opp_move = c_words[length(p_words) + 1]
+                PREV_MOVES[game_id] = moves_str
+            end
+        else
+            PREV_MOVES[game_id] = moves_str
+        end
+        
         v, ent, top5 = Cassandra.policy_info(model, board)
         open(joinpath(TRACES_DIR, "$game_id.jsonl"), "a") do io
             JSON3.write(io, (ply=n_prev, moves_before=moves_str, move=move,
+                             opponent_move=isempty(opp_move) ? nothing : opp_move,
                              value=round(v; digits=4),
                              entropy=round(ent; digits=4), top5=top5))
             println(io)
@@ -650,6 +684,14 @@ function _handle_event(client, event, bot_name)
             try BongCloud.decline_challenge(client, ch.id; reason="later") catch; end
         else
             challenger = get(something(ch.challenger, Dict{String,Any}()), "name", "?")
+            time_control = something(ch.timeControl, Dict{String,Any}())
+            limit = get(time_control, "limit", 0)
+            inc = get(time_control, "increment", 0)
+            if limit > 0
+                lock(GAME_TC_LOCK) do
+                    GAME_TC[ch.id] = (limit, inc)
+                end
+            end
             @info "Accepting challenge $(ch.id) from $challenger"
             try BongCloud.accept_challenge(client, ch.id) catch; end
         end

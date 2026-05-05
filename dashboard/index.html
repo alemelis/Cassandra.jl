@@ -192,6 +192,16 @@
         .badge.badge-ok   { background: rgba(93,202,165,0.18); color: var(--green); }
         .badge.badge-warn { background: rgba(224,112,64,0.18); color: var(--red); }
 
+        /* Time control badges */
+        .tc {
+            display: inline-block; width: 20px; height: 20px; line-height: 20px;
+            text-align: center; border-radius: 4px; font-size: 11px;
+        }
+        .tc.bullet      { background: rgba(255,197,53,0.18); color: #ffc535; }
+        .tc.blitz      { background: rgba(255,107,53,0.18); color: #ff6b35; }
+        .tc.rapid     { background: rgba(53,155,255,0.18); color: #359bff; }
+        .tc.classical { background: rgba(168,85,247,0.18); color: #a855f7; }
+
         /* Buttons */
         .btn {
             display: inline-flex; align-items: center; gap: 6px;
@@ -896,6 +906,18 @@ function badgeHtml(result) {
     return `<span class="badge ${c}">${ch}</span>`;
 }
 
+function tcBadgeHtml(clock_limit, clock_increment) {
+    if (!clock_limit) return '';
+    const total = clock_limit + (clock_increment || 0);
+    let tc = '?';
+    let cls = 'tc';
+    if (total < 180) { tc = '●'; cls = 'tc bullet'; }
+    else if (total < 600) { tc = '⚡'; cls = 'tc blitz'; }
+    else if (total < 1800) { tc = '◆'; cls = 'tc rapid'; }
+    else { tc = '♔'; cls = 'tc classical'; }
+    return `<span class="${cls}" title="${clock_limit}+${clock_increment}">${tc}</span>`;
+}
+
 function renderGames() {
     const games = state.games;
     $('games-count').textContent = games.length ? `(${games.length})` : '';
@@ -910,6 +932,7 @@ function renderGames() {
             : escapeHtml(g.opponent || '?');
         const side = g.color === 'white' ? '○' : '●';
         const ts = g.ts ? g.ts.replace('T', ' ').slice(5, 16) : '';
+        const tc = tcBadgeHtml(g.clock_limit, g.clock_increment);
         const replay = g.has_trace
             ? `<a class="muted" href="#" onclick="event.preventDefault();selectReplayGame('${g.game_id}')" title="Replay" style="color:var(--green)">▶</a>`
             : '';
@@ -918,6 +941,7 @@ function renderGames() {
         const handler = g.has_trace ? `onclick="selectReplayGame('${g.game_id}')"` : '';
         return `<tr class="${cls}" ${handler}>
             <td>${badgeHtml(g.result)}</td>
+            <td>${tc}</td>
             <td>${opp}</td>
             <td style="color:var(--text-muted)">${side}</td>
             <td class="muted">${ts}</td>
@@ -925,7 +949,7 @@ function renderGames() {
         </tr>`;
     }).join('');
     $('games-wrap').innerHTML = `<table>
-        <thead><tr><th></th><th>Opponent</th><th>Side</th><th>Date</th><th></th></tr></thead>
+        <thead><tr><th></th><th></th><th>Opponent</th><th>Side</th><th>Date</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table>`;
 }
 
@@ -1314,6 +1338,7 @@ function renderReplayStep() {
     $('r-pos').textContent = steps.length ? `Move ${idx + 1} / ${steps.length}` : '—';
     if (!steps.length) return;
     const step = steps[idx];
+    const prevStep = idx > 0 ? steps[idx - 1] : null;
 
     if (_replay.board && window.Chess) {
         try {
@@ -1330,6 +1355,16 @@ function renderReplayStep() {
             if (from && to) {
                 jQuery(`.square-${from}, .square-${to}`)
                     .css('background', 'rgba(83,74,183,0.42)');
+            }
+            const oppMove = step.opponent_move || (prevStep ? (() => {
+                const prevMoves = (prevStep.moves_before || '').trim().split(/\s+/).filter(Boolean);
+                const currMoves = (step.moves_before || '').trim().split(/\s+/).filter(Boolean);
+                if (currMoves.length > prevMoves.length) return currMoves[prevMoves.length];
+                return '';
+            })() : '');
+            if (oppMove && oppMove.length >= 4) {
+                jQuery(`.square-${oppMove.slice(0,2)}, .square-${oppMove.slice(2,4)}`)
+                    .css('background', 'rgba(255,197,53,0.42)');
             }
         } catch(e) { console.warn('replay render:', e); }
     }
