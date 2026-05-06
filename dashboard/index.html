@@ -1,1030 +1,2082 @@
 <!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Cassandra</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap" rel="stylesheet" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
-    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
-    <style>
-        @media (prefers-color-scheme: light) {
-            :root {
-                --bg: #fafaf8; --bg-card: #ffffff;
-                --text: #2c2c2a; --text-muted: #888780;
-                --border: rgba(0,0,0,0.08);
+    <head>
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="favicon_io/apple-touch-icon.png"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="favicon_io/favicon-32x32.png"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            sizes="16x16"
+            href="favicon_io/favicon-16x16.png"
+        />
+        <link rel="manifest" href="favicon_io/site.webmanifest" />
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Cassandra</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&display=swap"
+            rel="stylesheet"
+        />
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+        <link
+            rel="stylesheet"
+            href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css"
+        />
+        <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+        <style>
+            @media (prefers-color-scheme: light) {
+                :root {
+                    --bg: #fafaf8;
+                    --bg-card: #ffffff;
+                    --text: #2c2c2a;
+                    --text-muted: #888780;
+                    --border: rgba(0, 0, 0, 0.08);
+                }
             }
-        }
-        :root {
-            --bg: #1a1a1e; --bg-card: #242428;
-            --text: #e0dfd8; --text-muted: #888780;
-            --border: rgba(255,255,255,0.08);
-            --accent: #534ab7; --green: #5dcaa5; --red: #e07040;
-        }
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            background: var(--bg); color: var(--text);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            font-size: 15px; line-height: 1.55;
-        }
-        a { color: inherit; text-decoration: none; }
-        code, .mono { font-family: "SF Mono", "Fira Code", monospace; }
+            :root {
+                --bg: #1a1a1e;
+                --bg-card: #242428;
+                --text: #e0dfd8;
+                --text-muted: #888780;
+                --border: rgba(255, 255, 255, 0.08);
+                --accent: #534ab7;
+                --green: #5dcaa5;
+                --red: #e07040;
+            }
+            html.light {
+                --bg: #fafaf8;
+                --bg-card: #ffffff;
+                --text: #2c2c2a;
+                --text-muted: #6b6a66;
+                --border: rgba(0, 0, 0, 0.09);
+                --accent: #534ab7;
+                --green: #1e9974;
+                --red: #c8401a;
+            }
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                background: var(--bg);
+                color: var(--text);
+                font-family:
+                    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                font-size: 15px;
+                line-height: 1.55;
+            }
+            a {
+                color: inherit;
+                text-decoration: none;
+            }
+            code,
+            .mono {
+                font-family: "SF Mono", "Fira Code", monospace;
+            }
 
-        /* Nav */
-        .nav {
-            position: sticky; top: 0; z-index: 100;
-            background: var(--bg); border-bottom: 1px solid var(--border);
-            backdrop-filter: blur(8px);
-        }
-        .nav-inner {
-            max-width: 960px; margin: 0 auto;
-            padding: 0 1rem; height: 48px;
-            display: flex; align-items: center; gap: 8px;
-        }
-        .nav-brand {
-            font-family: "DM Serif Display", serif; font-size: 20px; letter-spacing: -0.5px;
-            white-space: nowrap; flex-shrink: 0;
-        }
-        .nav-link {
-            color: var(--text-muted); font-size: 13px; font-weight: 500;
-            padding: 4px 8px; border-radius: 5px; cursor: pointer;
-            white-space: nowrap; flex-shrink: 0;
-        }
-        .nav-link:hover { color: var(--text); }
-        .nav-link.active { color: var(--text); background: var(--bg-card); }
-        /* spacer collapses fully so right-side items are never clipped */
-        .nav-spacer { flex: 1 1 0; min-width: 0; }
-        .nav-dot {
-            display: inline-flex; align-items: center; gap: 4px;
-            font-size: 11px; color: var(--text-muted); padding: 0 4px;
-            flex-shrink: 0;
-        }
-        .nav-dot-label { overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
-        .dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background: var(--text-muted); flex-shrink: 0;
-        }
-        .dot.on { background: var(--green); animation: pulse 2s ease-in-out infinite; }
-        .dot.warn { background: var(--red); }
-        .btn-auth { flex-shrink: 0; }
-        /* bot pause button in nav */
-        .btn-games {
-            display: inline-flex; align-items: center; gap: 5px;
-            padding: 3px 9px; border-radius: 5px; flex-shrink: 0;
-            background: transparent; border: 1px solid transparent;
-            color: var(--text-muted); font-size: 12px; font-weight: 500;
-            cursor: pointer; transition: color .15s, border-color .15s, background .15s;
-        }
-        .btn-games:hover { border-color: var(--border); color: var(--text); }
-        .btn-games.active { color: var(--green); }
-        .btn-games.paused { color: var(--red); border-color: rgba(224,112,64,0.4); background: rgba(224,112,64,0.07); }
-        @media (max-width: 500px) {
-            .nav-dot-label { display: none; }
-            .nav-dot { padding: 0 2px; gap: 0; }
-            .nav-inner { gap: 4px; }
-        }
-        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
-        @keyframes spin { to { transform: rotate(360deg); } }
+            /* Nav */
+            .nav {
+                position: sticky;
+                top: 0;
+                z-index: 100;
+                background: var(--bg);
+                border-bottom: 1px solid var(--border);
+                backdrop-filter: blur(8px);
+            }
+            .nav-inner {
+                max-width: 960px;
+                margin: 0 auto;
+                padding: 0 1rem;
+                height: 48px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .nav-brand {
+                font-family: "DM Serif Display", serif;
+                font-size: 20px;
+                letter-spacing: -0.5px;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+            .nav-link {
+                color: var(--text-muted);
+                font-size: 13px;
+                font-weight: 500;
+                padding: 4px 8px;
+                border-radius: 5px;
+                cursor: pointer;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+            .nav-link:hover {
+                color: var(--text);
+            }
+            .nav-link.active {
+                color: var(--text);
+                background: var(--bg-card);
+            }
+            /* spacer collapses fully so right-side items are never clipped */
+            .nav-spacer {
+                flex: 1 1 0;
+                min-width: 0;
+            }
+            .nav-dot {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 11px;
+                color: var(--text-muted);
+                padding: 0 4px;
+                flex-shrink: 0;
+            }
+            .nav-dot-label {
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 110px;
+            }
+            .dot {
+                width: 8px;
+                height: 8px;
+                border-radius: 50%;
+                background: var(--text-muted);
+                flex-shrink: 0;
+            }
+            .dot.on {
+                background: var(--green);
+                animation: pulse 2s ease-in-out infinite;
+            }
+            .dot.warn {
+                background: var(--red);
+            }
+            .btn-auth {
+                flex-shrink: 0;
+            }
+            /* bot pause button in nav */
+            .btn-games {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 3px 9px;
+                border-radius: 5px;
+                flex-shrink: 0;
+                background: transparent;
+                border: 1px solid transparent;
+                color: var(--text-muted);
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                transition:
+                    color 0.15s,
+                    border-color 0.15s,
+                    background 0.15s;
+            }
+            .btn-games:hover {
+                border-color: var(--border);
+                color: var(--text);
+            }
+            .btn-games.active {
+                color: var(--green);
+            }
+            .btn-games.paused {
+                color: var(--red);
+                border-color: rgba(224, 112, 64, 0.4);
+                background: rgba(224, 112, 64, 0.07);
+            }
+            @media (max-width: 500px) {
+                .nav-dot-label {
+                    display: none;
+                }
+                .nav-dot {
+                    padding: 0 2px;
+                    gap: 0;
+                }
+                .nav-inner {
+                    gap: 4px;
+                }
+            }
+            @keyframes pulse {
+                0%,
+                100% {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+                50% {
+                    opacity: 0.5;
+                    transform: scale(0.85);
+                }
+            }
+            @keyframes spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
 
-        .btn-auth {
-            display: flex; align-items: center; gap: 5px;
-            padding: 4px 10px; border: 1px solid var(--border); border-radius: 5px;
-            background: transparent; color: var(--text-muted); font-size: 12px;
-            cursor: pointer;
-        }
-        .btn-auth:hover { color: var(--text); border-color: var(--text-muted); }
-        .btn-auth.authed { color: var(--green); border-color: var(--green); }
+            .btn-auth {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                padding: 4px 10px;
+                border: 1px solid var(--border);
+                border-radius: 5px;
+                background: transparent;
+                color: var(--text-muted);
+                font-size: 12px;
+                cursor: pointer;
+            }
+            .btn-auth:hover {
+                color: var(--text);
+                border-color: var(--text-muted);
+            }
+            .btn-auth.authed {
+                color: var(--green);
+                border-color: var(--green);
+            }
 
-        /* Page */
-        html { overflow-x: hidden; max-width: 100vw; }
-        body { overflow-x: hidden; }
-        main { max-width: 960px; margin: 0 auto; padding: 1.5rem 1rem 4rem; }
-        section.view { display: none; }
-        section.view.active { display: block; }
-        h2 {
-            font-family: "DM Serif Display", serif; font-size: 22px; font-weight: 400;
-            margin: 1.75rem 0 0.75rem;
-        }
-        h2:first-child { margin-top: 0; }
-        h3 {
-            font-size: 11px; font-weight: 600; text-transform: uppercase;
-            letter-spacing: 0.06em; color: var(--text-muted);
-            margin-bottom: 0.6rem;
-        }
-        .muted { color: var(--text-muted); font-size: 12px; }
+            /* Page */
+            html {
+                overflow-x: hidden;
+                max-width: 100vw;
+            }
+            body {
+                overflow-x: hidden;
+            }
+            main {
+                max-width: 960px;
+                margin: 0 auto;
+                padding: 1.5rem 1rem 4rem;
+            }
+            section.view {
+                display: none;
+            }
+            section.view.active {
+                display: block;
+            }
+            h2 {
+                font-family: "DM Serif Display", serif;
+                font-size: 22px;
+                font-weight: 400;
+                margin: 1.75rem 0 0.75rem;
+            }
+            h2:first-child {
+                margin-top: 0;
+            }
+            h3 {
+                font-size: 11px;
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+                color: var(--text-muted);
+                margin-bottom: 0.6rem;
+            }
+            .muted {
+                color: var(--text-muted);
+                font-size: 12px;
+            }
 
-        /* Status header (Live) */
-        .status {
-            display: grid;
-            grid-template-columns: 1fr auto auto auto auto;
-            gap: 1px; background: var(--border);
-            border: 1px solid var(--border); border-radius: 8px;
-            overflow: hidden; margin-bottom: 1.5rem;
-        }
-        .status > div { background: var(--bg-card); padding: 0.75rem 1rem; }
-        .status-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
-        .status-value { font-size: 18px; font-weight: 500; letter-spacing: -0.3px; }
-        .status-value.mono { font-size: 14px; }
-        .status-value .sub { color: var(--text-muted); font-size: 12px; font-weight: 400; margin-left: 4px; }
-        .status-value .green { color: var(--green); }
-        .status-value .red { color: var(--red); }
-        @media (max-width: 700px) {
-            .status { grid-template-columns: 1fr 1fr; }
-        }
-        @media (max-width: 400px) {
-            .status { grid-template-columns: 1fr 1fr; }
-            .status-value { font-size: 15px; }
-        }
+            /* Status header (Live) */
+            .status {
+                display: grid;
+                grid-template-columns: 1fr auto auto auto auto;
+                gap: 1px;
+                background: var(--border);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                overflow: hidden;
+                margin-bottom: 1.5rem;
+            }
+            .status > div {
+                background: var(--bg-card);
+                padding: 0.75rem 1rem;
+            }
+            .status-label {
+                font-size: 10px;
+                color: var(--text-muted);
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                margin-bottom: 2px;
+            }
+            .status-value {
+                font-size: 18px;
+                font-weight: 500;
+                letter-spacing: -0.3px;
+            }
+            .status-value.mono {
+                font-size: 14px;
+            }
+            .status-value .sub {
+                color: var(--text-muted);
+                font-size: 12px;
+                font-weight: 400;
+                margin-left: 4px;
+            }
+            .status-value .green {
+                color: var(--green);
+            }
+            .status-value .red {
+                color: var(--red);
+            }
+            @media (max-width: 700px) {
+                .status {
+                    grid-template-columns: 1fr 1fr;
+                }
+            }
+            @media (max-width: 400px) {
+                .status {
+                    grid-template-columns: 1fr 1fr;
+                }
+                .status-value {
+                    font-size: 15px;
+                }
+            }
 
-        /* Charts */
-        .chart-wrap {
-            position: relative; height: 280px;
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 0.75rem 1rem;
-            margin-bottom: 1.5rem;
-        }
-        .chart-legend {
-            display: flex; gap: 14px; font-size: 11px; color: var(--text-muted);
-            margin-bottom: 6px; flex-wrap: wrap;
-        }
-        .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+            /* Charts */
+            .chart-wrap {
+                position: relative;
+                height: 280px;
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 0.75rem 1rem;
+                margin-bottom: 1.5rem;
+            }
+            .chart-legend {
+                display: flex;
+                gap: 14px;
+                font-size: 11px;
+                color: var(--text-muted);
+                margin-bottom: 6px;
+                flex-wrap: wrap;
+            }
+            .legend-dot {
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 2px;
+                margin-right: 4px;
+                vertical-align: middle;
+            }
 
-        /* Table */
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th {
-            text-align: left; color: var(--text-muted); font-weight: 500;
-            font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
-            padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border);
-            white-space: nowrap;
-        }
-        td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); vertical-align: middle; }
-        tr:last-child td { border-bottom: none; }
-        .tbl-wrap {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 0.5rem 0.875rem;
-            overflow-x: auto; max-width: 100%;
-            margin-bottom: 1.5rem;
-        }
-        /* hide less-critical columns on narrow screens */
-        @media (max-width: 700px) {
-            .col-hide { display: none; }
-        }
-        tr.row-deployed td { background: rgba(93,202,165,0.07); }
-        tr.clickable { cursor: pointer; }
-        tr.clickable:hover td { background: rgba(83,74,183,0.07); }
+            /* Table */
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+            }
+            th {
+                text-align: left;
+                color: var(--text-muted);
+                font-weight: 500;
+                font-size: 10px;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                padding: 6px 8px 6px 0;
+                border-bottom: 1px solid var(--border);
+                white-space: nowrap;
+            }
+            td {
+                padding: 6px 8px 6px 0;
+                border-bottom: 1px solid var(--border);
+                vertical-align: middle;
+            }
+            tr:last-child td {
+                border-bottom: none;
+            }
+            .tbl-wrap {
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 0.5rem 0.875rem;
+                overflow-x: auto;
+                max-width: 100%;
+                margin-bottom: 1.5rem;
+            }
+            /* hide less-critical columns on narrow screens */
+            @media (max-width: 700px) {
+                .col-hide {
+                    display: none;
+                }
+            }
+            tr.row-deployed td {
+                background: rgba(93, 202, 165, 0.07);
+            }
+            tr.clickable {
+                cursor: pointer;
+            }
+            tr.clickable:hover td {
+                background: rgba(83, 74, 183, 0.07);
+            }
 
-        /* Result badges */
-        .badge {
-            display: inline-block; min-width: 20px; height: 20px; line-height: 20px;
-            padding: 0 6px;
-            text-align: center; border-radius: 4px; font-size: 10px; font-weight: 700;
-        }
-        .badge.win  { background: rgba(93,202,165,0.18); color: var(--green); }
-        .badge.loss { background: rgba(224,112,64,0.18); color: var(--red); }
-        .badge.draw { background: rgba(136,135,128,0.18); color: var(--text-muted); }
-        .badge.deployed { background: transparent; border: 1px solid var(--green); color: var(--green); font-weight: 500; }
-        .badge.training { background: transparent; border: 1px solid var(--accent); color: var(--accent); font-weight: 500; }
-        .badge.badge-ok   { background: rgba(93,202,165,0.18); color: var(--green); }
-        .badge.badge-warn { background: rgba(224,112,64,0.18); color: var(--red); }
+            /* Result badges */
+            .badge {
+                display: inline-block;
+                min-width: 20px;
+                height: 20px;
+                line-height: 20px;
+                padding: 0 6px;
+                text-align: center;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: 700;
+            }
+            .badge.win {
+                background: rgba(93, 202, 165, 0.18);
+                color: var(--green);
+            }
+            .badge.loss {
+                background: rgba(224, 112, 64, 0.18);
+                color: var(--red);
+            }
+            .badge.draw {
+                background: rgba(136, 135, 128, 0.18);
+                color: var(--text-muted);
+            }
+            .badge.deployed {
+                background: transparent;
+                border: 1px solid var(--green);
+                color: var(--green);
+                font-weight: 500;
+            }
+            .badge.training {
+                background: transparent;
+                border: 1px solid var(--accent);
+                color: var(--accent);
+                font-weight: 500;
+            }
+            .badge.badge-ok {
+                background: rgba(93, 202, 165, 0.18);
+                color: var(--green);
+            }
+            .badge.badge-warn {
+                background: rgba(224, 112, 64, 0.18);
+                color: var(--red);
+            }
 
-        /* Time control badges */
-        .tc {
-            display: inline-block; width: 20px; height: 20px; line-height: 20px;
-            text-align: center; border-radius: 4px; font-size: 11px;
-        }
-        .tc.bullet      { background: rgba(255,197,53,0.18); color: #ffc535; }
-        .tc.blitz      { background: rgba(255,107,53,0.18); color: #ff6b35; }
-        .tc.rapid     { background: rgba(53,155,255,0.18); color: #359bff; }
-        .tc.classical { background: rgba(168,85,247,0.18); color: #a855f7; }
+            /* Time control badges */
+            .tc {
+                display: inline-block;
+                width: 20px;
+                height: 20px;
+                line-height: 20px;
+                text-align: center;
+                border-radius: 4px;
+                font-size: 11px;
+            }
+            .tc.bullet {
+                background: rgba(83, 74, 183, 0.18);
+                color: #534ab7;
+            }
+            .tc.blitz {
+                background: rgba(93, 202, 165, 0.18);
+                color: #5dcaa5;
+            }
+            .tc.rapid {
+                background: rgba(136, 135, 128, 0.18);
+                color: #888780;
+            }
+            .tc.classical {
+                background: rgba(224, 112, 64, 0.18);
+                color: #e07040;
+            }
 
-        /* Buttons */
-        .btn {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 5px 12px; border-radius: 5px;
-            font-size: 12px; font-weight: 500; cursor: pointer;
-            border: 1px solid var(--border); background: transparent; color: var(--text-muted);
-            transition: color .15s, border-color .15s, background .15s;
-        }
-        .btn:hover { color: var(--text); border-color: var(--text-muted); }
-        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-        .btn.primary:hover { opacity: 0.85; color: #fff; }
-        .btn.danger { color: var(--red); border-color: rgba(224,112,64,0.4); }
-        .btn.danger:hover { background: rgba(224,112,64,0.08); color: var(--red); }
-        .spinner {
-            display: none; width: 10px; height: 10px;
-            border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff;
-            border-radius: 50%; animation: spin 0.7s linear infinite;
-        }
-        .btn.loading .spinner { display: inline-block; }
+            /* Buttons */
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 5px 12px;
+                border-radius: 5px;
+                font-size: 12px;
+                font-weight: 500;
+                cursor: pointer;
+                border: 1px solid var(--border);
+                background: transparent;
+                color: var(--text-muted);
+                transition:
+                    color 0.15s,
+                    border-color 0.15s,
+                    background 0.15s;
+            }
+            .btn:hover {
+                color: var(--text);
+                border-color: var(--text-muted);
+            }
+            .btn:disabled {
+                opacity: 0.4;
+                cursor: not-allowed;
+            }
+            .btn.primary {
+                background: var(--accent);
+                border-color: var(--accent);
+                color: #fff;
+            }
+            .btn.primary:hover {
+                opacity: 0.85;
+                color: #fff;
+            }
+            .btn.danger {
+                color: var(--red);
+                border-color: rgba(224, 112, 64, 0.4);
+            }
+            .btn.danger:hover {
+                background: rgba(224, 112, 64, 0.08);
+                color: var(--red);
+            }
+            .spinner {
+                display: none;
+                width: 10px;
+                height: 10px;
+                border: 2px solid rgba(255, 255, 255, 0.4);
+                border-top-color: #fff;
+                border-radius: 50%;
+                animation: spin 0.7s linear infinite;
+            }
+            .btn.loading .spinner {
+                display: inline-block;
+            }
 
-        /* Forms */
-        .field { display: flex; flex-direction: column; gap: 3px; }
-        .field label { font-size: 11px; color: var(--text-muted); }
-        .field input, .field select {
-            padding: 5px 8px; font-size: 13px;
-            background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
-            color: var(--text); outline: none; width: 100%;
-        }
-        .field input:focus, .field select:focus { border-color: var(--accent); }
-        .form-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr);
-            gap: 0.6rem; margin-bottom: 0.75rem;
-        }
-        @media (max-width: 700px) { .form-grid { grid-template-columns: repeat(2, 1fr); } }
-        .form-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; margin-top: 0.5rem; }
+            /* Forms */
+            .field {
+                display: flex;
+                flex-direction: column;
+                gap: 3px;
+            }
+            .field label {
+                font-size: 11px;
+                color: var(--text-muted);
+            }
+            .field input,
+            .field select {
+                padding: 5px 8px;
+                font-size: 13px;
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                color: var(--text);
+                outline: none;
+                width: 100%;
+            }
+            .field input:focus,
+            .field select:focus {
+                border-color: var(--accent);
+            }
+            .form-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 0.6rem;
+                margin-bottom: 0.75rem;
+            }
+            @media (max-width: 700px) {
+                .form-grid {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+            .form-row {
+                display: flex;
+                gap: 0.6rem;
+                align-items: center;
+                flex-wrap: wrap;
+                margin-top: 0.5rem;
+            }
 
-        .card {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 8px; padding: 1rem 1.25rem;
-            margin-bottom: 1.5rem;
-        }
+            .card {
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 8px;
+                padding: 1rem 1.25rem;
+                margin-bottom: 1.5rem;
+            }
 
-        /* Logs */
-        details.logs > summary {
-            cursor: pointer; list-style: none;
-            font-size: 12px; color: var(--text-muted);
-            padding: 6px 10px; border: 1px solid var(--border); border-radius: 5px;
-            display: inline-block;
-        }
-        details.logs > summary::-webkit-details-marker { display: none; }
-        details.logs[open] > summary { color: var(--green); border-color: var(--green); }
-        details.logs > summary::after { content: " ▾"; }
-        .log-pane {
-            margin-top: 0.5rem;
-            background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
-            padding: 0.5rem 0.75rem;
-            font-family: "SF Mono", monospace; font-size: 11.5px; line-height: 1.55;
-            max-height: 260px; overflow-y: auto;
-        }
-        .log-line { white-space: pre-wrap; word-break: break-all; color: #8b949e; }
-        .log-line.info { color: #79c0ff; }
-        .log-line.warn { color: #e3b341; }
-        .log-line.err  { color: #f85149; }
-        .log-empty { color: #444d56; font-style: italic; }
+            /* Logs */
+            details.logs > summary {
+                cursor: pointer;
+                list-style: none;
+                font-size: 12px;
+                color: var(--text-muted);
+                padding: 6px 10px;
+                border: 1px solid var(--border);
+                border-radius: 5px;
+                display: inline-block;
+            }
+            details.logs > summary::-webkit-details-marker {
+                display: none;
+            }
+            details.logs[open] > summary {
+                color: var(--green);
+                border-color: var(--green);
+            }
+            details.logs > summary::after {
+                content: " ▾";
+            }
+            .log-pane {
+                margin-top: 0.5rem;
+                background: #0d1117;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.5rem 0.75rem;
+                font-family: "SF Mono", monospace;
+                font-size: 11.5px;
+                line-height: 1.55;
+                max-height: 260px;
+                overflow-y: auto;
+            }
+            .log-line {
+                white-space: pre-wrap;
+                word-break: break-all;
+                color: #8b949e;
+            }
+            .log-line.info {
+                color: #79c0ff;
+            }
+            .log-line.warn {
+                color: #e3b341;
+            }
+            .log-line.err {
+                color: #f85149;
+            }
+            .log-empty {
+                color: #444d56;
+                font-style: italic;
+            }
 
-        /* Modal */
-        .modal-overlay {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,0.6); z-index: 200;
-            align-items: center; justify-content: center;
-        }
-        .modal-overlay.open { display: flex; }
-        .modal {
-            background: var(--bg-card); border: 1px solid var(--border);
-            border-radius: 10px; padding: 1.25rem; width: 320px;
-            display: flex; flex-direction: column; gap: 0.6rem;
-        }
-        .modal h3 { font-size: 14px; color: var(--text); text-transform: none; letter-spacing: 0; }
-        .modal input {
-            padding: 6px 10px; font-size: 14px;
-            background: var(--bg); border: 1px solid var(--border); border-radius: 5px;
-            color: var(--text); outline: none;
-        }
-        .modal input:focus { border-color: var(--accent); }
-        .modal-err { font-size: 12px; color: var(--red); min-height: 1em; }
-        .modal-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+            /* Modal */
+            .modal-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: rgba(0, 0, 0, 0.6);
+                z-index: 200;
+                align-items: center;
+                justify-content: center;
+            }
+            .modal-overlay.open {
+                display: flex;
+            }
+            .modal {
+                background: var(--bg-card);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 1.25rem;
+                width: 320px;
+                display: flex;
+                flex-direction: column;
+                gap: 0.6rem;
+            }
+            .modal h3 {
+                font-size: 14px;
+                color: var(--text);
+                text-transform: none;
+                letter-spacing: 0;
+            }
+            .modal input {
+                padding: 6px 10px;
+                font-size: 14px;
+                background: var(--bg);
+                border: 1px solid var(--border);
+                border-radius: 5px;
+                color: var(--text);
+                outline: none;
+            }
+            .modal input:focus {
+                border-color: var(--accent);
+            }
+            .modal-err {
+                font-size: 12px;
+                color: var(--red);
+                min-height: 1em;
+            }
+            .modal-actions {
+                display: flex;
+                gap: 0.5rem;
+                justify-content: flex-end;
+            }
 
-        /* Replay */
-        .replay-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 360px) 1fr;
-            gap: 1.25rem; align-items: start;
-        }
-        @media (max-width: 700px) {
-            .replay-grid { grid-template-columns: 1fr; }
-        }
-        #replay-board { width: 100%; max-width: 360px; }
-        .replay-nav { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-        .replay-nav .pos { flex: 1; text-align: center; font-size: 12px; color: var(--text-muted); }
-        .nn-row { margin-bottom: 1rem; }
-        .nn-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 4px; }
-        .nn-value { font-family: monospace; font-size: 13px; }
-        .value-bar {
-            position: relative; height: 8px; background: var(--border); border-radius: 4px; overflow: hidden;
-            margin-bottom: 4px;
-        }
-        .value-bar-mid { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--text-muted); opacity: 0.5; }
-        .value-bar-fill { position: absolute; height: 100%; transition: left .25s, width .25s, background .25s; }
-        .pol-row { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-bottom: 4px; }
-        .pol-move { font-family: monospace; width: 42px; flex-shrink: 0; }
-        .pol-move.played { color: var(--green); font-weight: 600; }
-        .pol-track { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-        .pol-fill { height: 100%; background: var(--accent); }
-        .pol-fill.played { background: var(--green); }
-        .pol-prob { width: 38px; text-align: right; color: var(--text-muted); font-family: monospace; flex-shrink: 0; }
+            /* Replay */
+            .replay-grid {
+                display: grid;
+                grid-template-columns: minmax(0, 360px) 1fr;
+                gap: 1.25rem;
+                align-items: start;
+            }
+            @media (max-width: 700px) {
+                .replay-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+            #replay-board {
+                width: 100%;
+                max-width: 360px;
+            }
+            .replay-nav {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                margin-top: 8px;
+            }
+            .replay-nav .pos {
+                flex: 1;
+                text-align: center;
+                font-size: 12px;
+                color: var(--text-muted);
+            }
+            .nn-row {
+                margin-bottom: 1rem;
+            }
+            .nn-label {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: var(--text-muted);
+                margin-bottom: 4px;
+            }
+            .nn-value {
+                font-family: monospace;
+                font-size: 13px;
+            }
+            .value-bar {
+                position: relative;
+                height: 8px;
+                background: var(--border);
+                border-radius: 4px;
+                overflow: hidden;
+                margin-bottom: 4px;
+            }
+            .value-bar-mid {
+                position: absolute;
+                left: 50%;
+                top: 0;
+                bottom: 0;
+                width: 1px;
+                background: var(--text-muted);
+                opacity: 0.5;
+            }
+            .value-bar-fill {
+                position: absolute;
+                height: 100%;
+                transition:
+                    left 0.25s,
+                    width 0.25s,
+                    background 0.25s;
+            }
+            .pol-row {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                margin-bottom: 4px;
+            }
+            .pol-move {
+                font-family: monospace;
+                width: 42px;
+                flex-shrink: 0;
+            }
+            .pol-move.played {
+                color: var(--green);
+                font-weight: 600;
+            }
+            .pol-track {
+                flex: 1;
+                height: 6px;
+                background: var(--border);
+                border-radius: 3px;
+                overflow: hidden;
+            }
+            .pol-fill {
+                height: 100%;
+                background: var(--accent);
+            }
+            .pol-fill.played {
+                background: var(--green);
+            }
+            .pol-prob {
+                width: 38px;
+                text-align: right;
+                color: var(--text-muted);
+                font-family: monospace;
+                flex-shrink: 0;
+            }
 
-        footer {
-            text-align: center; font-size: 11px; color: var(--text-muted);
-            padding: 2rem 0 0; margin-top: 3rem; border-top: 1px solid var(--border);
-        }
+            footer {
+                text-align: center;
+                font-size: 11px;
+                color: var(--text-muted);
+                padding: 2rem 0 0;
+                margin-top: 3rem;
+                border-top: 1px solid var(--border);
+            }
 
-        /* Docs content responsive styles */
-        #docs-content { word-wrap: break-word; overflow-wrap: break-word; }
-        #docs-content h1 { font-family: "DM Serif Display", serif; font-size: 26px; font-weight: 400; margin: 0 0 1rem; }
-        #docs-content h2 { font-family: "DM Serif Display", serif; font-size: 22px; font-weight: 400; margin: 1.5rem 0 0.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.4rem; }
-        #docs-content h3 { font-size: 17px; font-weight: 600; margin: 1.25rem 0 0.5rem; }
-        #docs-content h4 { font-size: 15px; font-weight: 600; margin: 1rem 0 0.4rem; }
-        #docs-content p { margin: 0 0 0.75rem; }
-        #docs-content ul, #docs-content ol { padding-left: 1.25rem; margin: 0 0 0.75rem; }
-        #docs-content li { margin: 0 0 0.3rem; overflow-wrap: break-word; }
-        #docs-content li { margin: 0 0 0.3rem; }
-        #docs-content code {
-            font-family: "SF Mono", "Fira Code", monospace; font-size: 13px;
-            background: rgba(255,255,255,0.06); padding: 1px 4px; border-radius: 3px;
-        }
-        #docs-content pre {
-            background: #0d1117; border: 1px solid var(--border); border-radius: 6px;
-            padding: 0.75rem 1rem; overflow-x: auto; margin: 0 0 0.75rem;
-            font-size: 12.5px; line-height: 1.5;
-            max-width: 100%; box-sizing: border-box;
-        }
-        #docs-content pre code { background: none; padding: 0; font-size: inherit; }
-        #docs-content table {
-            width: 100%; border-collapse: collapse; font-size: 13px;
-            display: block; overflow-x: auto; -webkit-overflow-scrolling: touch;
-            margin:0 0 1rem; max-width: 100%; box-sizing: border-box;
-        }
-        #docs-content th {
-            text-align: left; color: var(--text-muted); font-weight: 500;
-            font-size: 10px; letter-spacing: 0.05em; text-transform: uppercase;
-            padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border);
-            white-space: nowrap;
-        }
-        #docs-content td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); word-break: break-word; }
-        #docs-content blockquote {
-            border-left: 3px solid var(--accent); margin: 0 0 0.75rem; padding: 0.25rem 0 0.25rem 0.75rem;
-            color: var(--text-muted); font-style: italic;
-        }
-        #docs-content hr { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
-        #docs-content strong { font-weight: 600; }
-        @media (max-width: 700px) {
-            #docs-content h1 { font-size: 22px; }
-            #docs-content h2 { font-size: 19px; }
-            #docs-content h3 { font-size: 15px; }
-            #docs-content pre { font-size: 11.5px; padding: 0.5rem 0.75rem; }
-            #docs-content table { font-size: 12px; }
-        }
-        @media (max-width: 400px) {
-            #docs-content { line-height: 1.6; }
-            #docs-content h1 { font-size: 20px; }
-            #docs-content h2 { font-size: 17px; }
-            #docs-content pre { font-size: 11px; }
-        }
-    </style>
-</head>
-<body>
+            /* Docs content responsive styles */
+            #docs-content {
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+            }
+            #docs-content h1 {
+                font-family: "DM Serif Display", serif;
+                font-size: 26px;
+                font-weight: 400;
+                margin: 0 0 1rem;
+            }
+            #docs-content h2 {
+                font-family: "DM Serif Display", serif;
+                font-size: 22px;
+                font-weight: 400;
+                margin: 1.5rem 0 0.75rem;
+                border-bottom: 1px solid var(--border);
+                padding-bottom: 0.4rem;
+            }
+            #docs-content h3 {
+                font-size: 17px;
+                font-weight: 600;
+                margin: 1.25rem 0 0.5rem;
+            }
+            #docs-content h4 {
+                font-size: 15px;
+                font-weight: 600;
+                margin: 1rem 0 0.4rem;
+            }
+            #docs-content p {
+                margin: 0 0 0.75rem;
+            }
+            #docs-content ul,
+            #docs-content ol {
+                padding-left: 1.25rem;
+                margin: 0 0 0.75rem;
+            }
+            #docs-content li {
+                margin: 0 0 0.3rem;
+                overflow-wrap: break-word;
+            }
+            #docs-content li {
+                margin: 0 0 0.3rem;
+            }
+            #docs-content code {
+                font-family: "SF Mono", "Fira Code", monospace;
+                font-size: 13px;
+                background: rgba(255, 255, 255, 0.06);
+                padding: 1px 4px;
+                border-radius: 3px;
+            }
+            #docs-content pre {
+                background: #0d1117;
+                border: 1px solid var(--border);
+                border-radius: 6px;
+                padding: 0.75rem 1rem;
+                overflow-x: auto;
+                margin: 0 0 0.75rem;
+                font-size: 12.5px;
+                line-height: 1.5;
+                max-width: 100%;
+                box-sizing: border-box;
+            }
+            #docs-content pre code {
+                background: none;
+                padding: 0;
+                font-size: inherit;
+            }
+            #docs-content table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 13px;
+                display: block;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                margin: 0 0 1rem;
+                max-width: 100%;
+                box-sizing: border-box;
+            }
+            #docs-content th {
+                text-align: left;
+                color: var(--text-muted);
+                font-weight: 500;
+                font-size: 10px;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+                padding: 6px 8px 6px 0;
+                border-bottom: 1px solid var(--border);
+                white-space: nowrap;
+            }
+            #docs-content td {
+                padding: 6px 8px 6px 0;
+                border-bottom: 1px solid var(--border);
+                word-break: break-word;
+            }
+            #docs-content blockquote {
+                border-left: 3px solid var(--accent);
+                margin: 0 0 0.75rem;
+                padding: 0.25rem 0 0.25rem 0.75rem;
+                color: var(--text-muted);
+                font-style: italic;
+            }
+            #docs-content hr {
+                border: none;
+                border-top: 1px solid var(--border);
+                margin: 1.5rem 0;
+            }
+            #docs-content strong {
+                font-weight: 600;
+            }
+            @media (max-width: 700px) {
+                #docs-content h1 {
+                    font-size: 22px;
+                }
+                #docs-content h2 {
+                    font-size: 19px;
+                }
+                #docs-content h3 {
+                    font-size: 15px;
+                }
+                #docs-content pre {
+                    font-size: 11.5px;
+                    padding: 0.5rem 0.75rem;
+                }
+                #docs-content table {
+                    font-size: 12px;
+                }
+            }
+            @media (max-width: 400px) {
+                #docs-content {
+                    line-height: 1.6;
+                }
+                #docs-content h1 {
+                    font-size: 20px;
+                }
+                #docs-content h2 {
+                    font-size: 17px;
+                }
+                #docs-content pre {
+                    font-size: 11px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <nav class="nav">
+            <div class="nav-inner">
+                <span class="nav-brand"><img src="favicon_io/favicon-32x32.png" width="22" height="22" style="vertical-align:-5px;margin-right:5px;border-radius:4px" alt="">Cassandra</span>
+                <a class="nav-link" data-view="bot">Bot</a>
+                <a class="nav-link" data-view="models">Models</a>
+                <a class="nav-link" data-view="docs">Docs</a>
+                <span class="nav-spacer"></span>
+                <button
+                    class="btn-games"
+                    id="games-btn"
+                    onclick="toggleBot()"
+                    title="Pause / resume bot"
+                >
+                    ●&nbsp;bot
+                </button>
+                <span class="nav-dot" title="Trainer"
+                    ><span class="dot" id="dot-trainer"></span
+                    ><span class="nav-dot-label" id="trainer-text"
+                        >trainer</span
+                    ></span
+                >
+                <button class="btn-auth" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode" style="padding:4px 8px;font-size:14px;line-height:1">◑</button>
+                <button
+                    class="btn-auth"
+                    id="auth-btn"
+                    onclick="toggleLogin()"
+                    style="display: none"
+                >
+                    <span id="auth-label">Login</span>
+                </button>
+            </div>
+        </nav>
 
-<nav class="nav">
-    <div class="nav-inner">
-        <span class="nav-brand">Cassandra</span>
-        <a class="nav-link" data-view="bot">Bot</a>
-        <a class="nav-link" data-view="models">Models</a>
-        <a class="nav-link" data-view="docs">Docs</a>
-        <span class="nav-spacer"></span>
-        <button class="btn-games" id="games-btn" onclick="toggleGames()" title="Pause / resume accepting games">●&nbsp;bot</button>
-        <span class="nav-dot" title="Trainer"><span class="dot" id="dot-trainer"></span><span class="nav-dot-label" id="trainer-text">trainer</span></span>
-        <button class="btn-auth" id="auth-btn" onclick="toggleLogin()" style="display:none">
-            <span id="auth-label">Login</span>
-        </button>
-    </div>
-</nav>
-
-<div class="modal-overlay" id="login-modal" onclick="if(event.target===this)closeLogin()">
-    <div class="modal">
-        <h3>Admin login</h3>
-        <input type="password" id="secret-input" placeholder="Dashboard secret"
-               onkeydown="if(event.key==='Enter')submitLogin()" />
-        <p class="modal-err" id="login-err"></p>
-        <div class="modal-actions">
-            <button class="btn" onclick="closeLogin()">Cancel</button>
-            <button class="btn primary" onclick="submitLogin()">Login</button>
+        <div
+            class="modal-overlay"
+            id="login-modal"
+            onclick="if (event.target === this) closeLogin();"
+        >
+            <div class="modal">
+                <h3>Admin login</h3>
+                <input
+                    type="password"
+                    id="secret-input"
+                    placeholder="Dashboard secret"
+                    onkeydown="if (event.key === 'Enter') submitLogin();"
+                />
+                <p class="modal-err" id="login-err"></p>
+                <div class="modal-actions">
+                    <button class="btn" onclick="closeLogin()">Cancel</button>
+                    <button class="btn primary" onclick="submitLogin()">
+                        Login
+                    </button>
+                </div>
+            </div>
         </div>
-    </div>
-</div>
 
-<main>
-
-    <!-- ─── Bot ────────────────────────────────────────────── -->
-    <section class="view" data-view="bot">
-        <div class="status">
-            <div>
-                <div class="status-label">Deployed model</div>
-                <div class="status-value mono" id="s-model">—</div>
-            </div>
-            <div>
-                <div class="status-label">Epoch</div>
-                <div class="status-value" id="s-epoch">—</div>
-            </div>
-            <div>
-                <div class="status-label">Loss</div>
-                <div class="status-value mono" id="s-loss">—</div>
-            </div>
-            <div>
-                <div class="status-label">Record</div>
-                <div class="status-value mono" id="s-wld">—</div>
-            </div>
-            <div>
-                <div class="status-label">Win %</div>
-                <div class="status-value" id="s-winpct">—</div>
-            </div>
-        </div>
-
-        <h3 id="elo-h" style="display:none">ELO on Lichess</h3>
-        <div class="chart-legend" id="elo-legend" style="display:none"></div>
-        <div class="chart-wrap" id="elo-wrap" style="display:none"><canvas id="elo-chart"></canvas></div>
-
-        <h3>Recent games <span class="muted" id="games-count"></span></h3>
-        <div class="tbl-wrap" id="games-wrap">
-            <span class="muted">Loading…</span>
-        </div>
-
-        <div id="replay-viewer" style="display:none;margin-bottom:1.5rem">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:0.75rem">
-                <span class="badge" id="r-badge"></span>
-                <span class="mono" id="r-title"></span>
-                <span class="muted" id="r-sub" style="margin-left:4px"></span>
-                <a id="r-link" href="#" target="_blank" rel="noopener" style="margin-left:auto;font-size:11px;color:var(--text-muted)">↗ Lichess</a>
-                <button class="btn" onclick="closeReplay()" style="margin-left:4px">✕</button>
-            </div>
-            <div class="replay-grid">
-                <div id="replay-mid">
-                    <div id="replay-board"></div>
-                    <div class="replay-nav">
-                        <button class="btn" id="r-prev" onclick="replayPrev()">←</button>
-                        <span class="pos" id="r-pos">—</span>
-                        <button class="btn" id="r-next" onclick="replayNext()">→</button>
+        <main>
+            <!-- ─── Bot ────────────────────────────────────────────── -->
+            <section class="view" data-view="bot">
+                <div class="status">
+                    <div>
+                        <div class="status-label">Deployed model</div>
+                        <div class="status-value mono" id="s-model">—</div>
+                    </div>
+                    <div>
+                        <div class="status-label">Epoch</div>
+                        <div class="status-value" id="s-epoch">—</div>
+                    </div>
+                    <div>
+                        <div class="status-label">Loss</div>
+                        <div class="status-value mono" id="s-loss">—</div>
+                    </div>
+                    <div>
+                        <div class="status-label">Record</div>
+                        <div class="status-value mono" id="s-wld">—</div>
+                    </div>
+                    <div>
+                        <div class="status-label">Win %</div>
+                        <div class="status-value" id="s-winpct">—</div>
                     </div>
                 </div>
-                <div id="replay-nn">
-                    <div class="nn-row">
-                        <div class="nn-label">Value estimate</div>
-                        <div class="value-bar">
-                            <div class="value-bar-mid"></div>
-                            <div class="value-bar-fill" id="r-vfill"></div>
+
+                <h3 id="elo-h" style="display: none">ELO on Lichess</h3>
+                <div
+                    class="chart-legend"
+                    id="elo-legend"
+                    style="display: none"
+                ></div>
+                <div class="chart-wrap" id="elo-wrap" style="display: none">
+                    <canvas id="elo-chart"></canvas>
+                </div>
+
+                <h3>
+                    Recent games <span class="muted" id="games-count"></span>
+                </h3>
+                <div class="tbl-wrap" id="games-wrap">
+                    <span class="muted">Loading…</span>
+                </div>
+
+                <div
+                    id="replay-viewer"
+                    style="display: none; margin-bottom: 1.5rem"
+                >
+                    <div
+                        style="
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            margin-bottom: 0.75rem;
+                        "
+                    >
+                        <span class="badge" id="r-badge"></span>
+                        <span class="mono" id="r-title"></span>
+                        <span
+                            class="muted"
+                            id="r-sub"
+                            style="margin-left: 4px"
+                        ></span>
+                        <a
+                            id="r-link"
+                            href="#"
+                            target="_blank"
+                            rel="noopener"
+                            style="
+                                margin-left: auto;
+                                font-size: 11px;
+                                color: var(--text-muted);
+                            "
+                            >↗ Lichess</a
+                        >
+                        <button
+                            class="btn"
+                            onclick="closeReplay()"
+                            style="margin-left: 4px"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    <div class="replay-grid">
+                        <div id="replay-mid">
+                            <div id="replay-board"></div>
+                            <div class="replay-nav">
+                                <button
+                                    class="btn"
+                                    id="r-prev"
+                                    onclick="replayPrev()"
+                                >
+                                    ←
+                                </button>
+                                <span class="pos" id="r-pos">—</span>
+                                <button
+                                    class="btn"
+                                    id="r-next"
+                                    onclick="replayNext()"
+                                >
+                                    →
+                                </button>
+                            </div>
                         </div>
-                        <span class="nn-value" id="r-vtext">—</span>
+                        <div id="replay-nn">
+                            <div class="nn-row">
+                                <div class="nn-label">Value estimate</div>
+                                <div class="value-bar">
+                                    <div class="value-bar-mid"></div>
+                                    <div
+                                        class="value-bar-fill"
+                                        id="r-vfill"
+                                    ></div>
+                                </div>
+                                <span class="nn-value" id="r-vtext">—</span>
+                            </div>
+                            <div class="nn-row">
+                                <div class="nn-label">Policy entropy</div>
+                                <span class="nn-value" id="r-entropy">—</span>
+                            </div>
+                            <div class="nn-row">
+                                <div class="nn-label">Top-5 policy</div>
+                                <div id="r-bars"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="nn-row">
-                        <div class="nn-label">Policy entropy</div>
-                        <span class="nn-value" id="r-entropy">—</span>
+                </div>
+
+                <details class="logs" style="margin-bottom: 1.5rem">
+                    <summary>Bot logs</summary>
+                    <div class="log-pane" id="bot-log">
+                        <span class="log-empty">Loading…</span>
                     </div>
-                    <div class="nn-row">
-                        <div class="nn-label">Top-5 policy</div>
-                        <div id="r-bars"></div>
+                </details>
+
+                <h2>Bot controls</h2>
+                <div class="card" id="bot-ctrl">
+                    <div
+                        class="form-row"
+                        style="margin-top: 0; align-items: center"
+                    >
+                        <button class="btn" onclick="restartBot()">
+                            Restart bot
+                        </button>
+                        <button class="btn" onclick="restartDashboard()">
+                            Restart dashboard
+                        </button>
+                        <button
+                            class="btn"
+                            id="bot-pause-btn"
+                            onclick="toggleBot()"
+                            disabled
+                        >
+                            Pause bot
+                        </button>
+                        <span class="muted" id="bc-msg"></span>
+                    </div>
+                    <div
+                        id="bot-status-line"
+                        style="margin: 0.4rem 0 0.75rem; font-size: 0.88rem"
+                    ></div>
+                    <div class="form-grid">
+                        <div class="field">
+                            <label>Search depth (plies)</label>
+                            <input
+                                type="number"
+                                id="cfg-depth"
+                                min="1"
+                                max="10"
+                                step="1"
+                                onchange="saveBotConfig()"
+                            />
+                        </div>
+                        <div class="field">
+                            <label>Rating window low</label>
+                            <input
+                                type="number"
+                                id="cfg-rlo"
+                                step="50"
+                                onchange="saveBotConfig()"
+                            />
+                        </div>
+                        <div class="field">
+                            <label>Rating window high</label>
+                            <input
+                                type="number"
+                                id="cfg-rhi"
+                                step="50"
+                                onchange="saveBotConfig()"
+                            />
+                        </div>
+                        <div class="field">
+                            <label>Daily quota</label>
+                            <input
+                                type="number"
+                                id="cfg-quota"
+                                min="1"
+                                max="100"
+                                step="1"
+                                onchange="saveBotConfig()"
+                            />
+                        </div>
+                        <div class="field">
+                            <label>Min gap (s)</label>
+                            <input
+                                type="number"
+                                id="cfg-gap"
+                                min="30"
+                                step="10"
+                                onchange="saveBotConfig()"
+                            />
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </section>
 
-        <details class="logs" style="margin-bottom:1.5rem">
-            <summary>Bot logs</summary>
-            <div class="log-pane" id="bot-log"><span class="log-empty">Loading…</span></div>
-        </details>
-
-        <h2>Bot controls</h2>
-        <div class="card" id="bot-ctrl">
-            <div class="form-row" style="margin-top:0">
-                <button class="btn" onclick="restartBot()">Restart bot</button>
-                <button class="btn" onclick="restartDashboard()">Restart dashboard</button>
-                <button class="btn" id="ch-btn" onclick="toggleChallenges()">…</button>
-                <span class="field" style="width:160px;max-width:100%">
-                    <label>Max ply (search depth)</label>
-                    <input type="number" id="maxply" min="1" max="32" step="1" onchange="setMaxPly()" />
-                </span>
-                <span class="muted" id="bc-msg"></span>
-            </div>
-        </div>
-    </section>
-
-    <!-- ─── Models ─────────────────────────────────────────── -->
-    <section class="view" data-view="models">
-        <h3>Training loss</h3>
-        <div class="chart-legend">
-            <span><span class="legend-dot" style="background:#534ab7"></span>Policy loss</span>
-            <span><span class="legend-dot" style="background:#888780"></span>s / epoch</span>
-            <span id="dep-legend" style="display:none">
-                <span class="legend-dot" style="border-left:2px dashed #5dcaa5;background:none;width:2px;height:12px"></span>Deployed
-            </span>
-        </div>
-        <div class="chart-wrap"><canvas id="loss-chart"></canvas></div>
-
-        <h2>Checkpoints</h2>
-        <div class="tbl-wrap" id="ckpt-wrap"><span class="muted">Loading…</span></div>
-
-        <h2>Train new model</h2>
-        <div class="card" id="train-card">
-            <div class="form-grid">
-                <div class="field">
-                    <label>Dataset</label>
-                    <select id="t-dataset"></select>
+            <!-- ─── Models ─────────────────────────────────────────── -->
+            <section class="view" data-view="models">
+                <h3>Training loss</h3>
+                <div class="chart-legend">
+                    <span
+                        ><span
+                            class="legend-dot"
+                            style="background: #534ab7"
+                        ></span
+                        >Policy loss</span
+                    >
+                    <span
+                        ><span
+                            class="legend-dot"
+                            style="background: #888780"
+                        ></span
+                        >s / epoch</span
+                    >
+                    <span id="dep-legend" style="display: none">
+                        <span
+                            class="legend-dot"
+                            style="
+                                border-left: 2px dashed #5dcaa5;
+                                background: none;
+                                width: 2px;
+                                height: 12px;
+                            "
+                        ></span
+                        >Deployed
+                    </span>
                 </div>
-                <div class="field">
-                    <label>Base model</label>
-                    <select id="t-base">
-                        <option value="">— fresh —</option>
-                    </select>
+                <div class="chart-wrap"><canvas id="loss-chart"></canvas></div>
+
+                <h2>Checkpoints</h2>
+                <div class="tbl-wrap" id="ckpt-wrap">
+                    <span class="muted">Loading…</span>
                 </div>
-                <div class="field">
-                    <label>Trunk sizes</label>
-                    <input type="text" id="t-trunk" value="256,128" />
+
+                <h2>Train new model</h2>
+                <div class="card" id="train-card">
+                    <div class="form-grid">
+                        <div class="field">
+                            <label>Dataset</label>
+                            <select id="t-dataset"></select>
+                        </div>
+                        <div class="field">
+                            <label>Base model</label>
+                            <select id="t-base">
+                                <option value="">— fresh —</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Trunk sizes</label>
+                            <input type="text" id="t-trunk" value="256,128" />
+                        </div>
+                        <div class="field">
+                            <label>Dropout</label>
+                            <input
+                                type="number"
+                                id="t-drop"
+                                value="0.1"
+                                min="0"
+                                max="0.9"
+                                step="0.05"
+                            />
+                        </div>
+                        <div class="field">
+                            <label>Epochs</label>
+                            <input
+                                type="number"
+                                id="t-epochs"
+                                value="20"
+                                min="1"
+                            />
+                        </div>
+                        <div class="field">
+                            <label>Batch size</label>
+                            <input
+                                type="number"
+                                id="t-batch"
+                                value="512"
+                                min="64"
+                            />
+                        </div>
+                        <div class="field">
+                            <label>Learning rate</label>
+                            <input type="text" id="t-lr" value="3e-4" />
+                        </div>
+                        <div class="field">
+                            <label>LR min (cosine)</label>
+                            <input type="text" id="t-lr-min" value="3e-6" />
+                        </div>
+                        <div class="field">
+                            <label>Weight decay</label>
+                            <input
+                                type="number"
+                                id="t-wd"
+                                value="1e-4"
+                                min="0"
+                                max="0.1"
+                                step="0.001"
+                            />
+                        </div>
+                        <div class="field">
+                            <label>Value weight</label>
+                            <input
+                                type="number"
+                                id="t-vw"
+                                value="0.0"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                            />
+                        </div>
+                        <div class="field">
+                            <label>Eval games</label>
+                            <input
+                                type="number"
+                                id="t-eval"
+                                value="0"
+                                min="0"
+                            />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <button
+                            class="btn primary"
+                            id="t-start"
+                            onclick="startTraining()"
+                        >
+                            Start training
+                        </button>
+                        <button
+                            class="btn danger"
+                            id="t-stop"
+                            onclick="stopTraining()"
+                            style="display: none"
+                        >
+                            Stop
+                        </button>
+                        <span class="muted" id="t-fb"></span>
+                    </div>
                 </div>
-                <div class="field">
-                    <label>Dropout</label>
-                    <input type="number" id="t-drop" value="0.1" min="0" max="0.9" step="0.05" />
+
+                <h2>Datasets</h2>
+                <div class="tbl-wrap" id="ds-wrap">
+                    <span class="muted">Loading…</span>
                 </div>
-                <div class="field">
-                    <label>Epochs</label>
-                    <input type="number" id="t-epochs" value="20" min="1" />
+            </section>
+
+            <!-- ─── Docs ─────────────────────────────────────────────── -->
+            <section class="view" data-view="docs">
+                <div class="card" style="padding: 1.5rem">
+                    <div
+                        id="docs-content"
+                        style="color: var(--text); line-height: 1.7"
+                    >
+                        <span class="muted">Loading documentation…</span>
+                    </div>
                 </div>
-                <div class="field">
-                    <label>Batch size</label>
-                    <input type="number" id="t-batch" value="512" min="64" />
-                </div>
-                <div class="field">
-                    <label>Learning rate</label>
-                    <input type="text" id="t-lr" value="3e-4" />
-                </div>
-                <div class="field">
-                    <label>LR min (cosine)</label>
-                    <input type="text" id="t-lr-min" value="3e-6" />
-                </div>
-                <div class="field">
-                    <label>Weight decay</label>
-                    <input type="number" id="t-wd" value="1e-4" min="0" max="0.1" step="0.001" />
-                </div>
-                <div class="field">
-                    <label>Value weight</label>
-                    <input type="number" id="t-vw" value="0.0" min="0" max="1" step="0.05" />
-                </div>
-                <div class="field">
-                    <label>Eval games</label>
-                    <input type="number" id="t-eval" value="0" min="0" />
-                </div>
-            </div>
-            <div class="form-row">
-                <button class="btn primary" id="t-start" onclick="startTraining()">Start training</button>
-                <button class="btn danger" id="t-stop" onclick="stopTraining()" style="display:none">Stop</button>
-                <span class="muted" id="t-fb"></span>
-            </div>
-        </div>
+            </section>
 
-        <h2>Datasets</h2>
-        <div class="tbl-wrap" id="ds-wrap"><span class="muted">Loading…</span></div>
+            <footer>Cassandra · Bobby.jl · Flux.jl · MIT</footer>
+        </main>
 
-    </section>
+        <script>
+            // ═══════════════════════════════════════════════════════════════
+            // State
+            // ═══════════════════════════════════════════════════════════════
+            const REFRESH_MS = 30_000;
+            const SECRET_KEY = "cassandra_dashboard_secret";
 
-    <!-- ─── Docs ─────────────────────────────────────────────── -->
-    <section class="view" data-view="docs">
-        <div class="card" style="padding:1.5rem">
-            <div id="docs-content" style="color:var(--text);line-height:1.7">
-                <span class="muted">Loading documentation…</span>
-            </div>
-        </div>
-    </section>
+            const state = {
+                games: [],
+                allGames: [],
+                checkpoints: [],
+                datasets: [],
+                deployed: null,
+                trainLog: [],
+                rating: null,
+                trainer: { running: false },
+                botStatus: null,
+                botConfig: null,
+            };
 
-    <footer>Cassandra · Bobby.jl · Flux.jl · MIT</footer>
-</main>
+            let lossChart = null,
+                eloChart = null;
+            let _authRequired = false;
+            let _replay = {
+                steps: [],
+                idx: 0,
+                board: null,
+                color: "white",
+                initFen: null,
+                gameId: null,
+            };
+            let _logTimer = null;
+            let _currentView = "bot";
 
-<script>
-// ═══════════════════════════════════════════════════════════════
-// State
-// ═══════════════════════════════════════════════════════════════
-const REFRESH_MS = 30_000;
-const SECRET_KEY = 'cassandra_dashboard_secret';
+            // ═══════════════════════════════════════════════════════════════
+            // Auth
+            // ═══════════════════════════════════════════════════════════════
+            const getSecret = () => sessionStorage.getItem(SECRET_KEY) || "";
+            const authHeader = () => ({
+                Authorization: "Bearer " + getSecret(),
+            });
+            const isAuthed = () => !_authRequired || !!getSecret();
 
-const state = {
-    games: [], allGames: [], checkpoints: [], datasets: [],
-    deployed: null, trainLog: [], rating: null,
-    trainer: { running: false }, arenas: [],
-    challenge: null, maxDepth: null, gamesPaused: false,
-};
+            async function initAuth() {
+                try {
+                    const r = await fetch("/api/auth/required");
+                    _authRequired = (await r.json()).required;
+                } catch {
+                    _authRequired = false;
+                }
+                document.getElementById("auth-btn").style.display =
+                    _authRequired ? "" : "none";
+                setAuthedUI(isAuthed());
+            }
+            function setAuthedUI(on) {
+                const btn = document.getElementById("auth-btn");
+                btn.classList.toggle("authed", on);
+                document.getElementById("auth-label").textContent = on
+                    ? "Logout"
+                    : "Login";
+            }
+            function toggleTheme() {
+                const isLight = document.documentElement.classList.toggle('light');
+                localStorage.setItem('cassandra_theme', isLight ? 'light' : 'dark');
+            }
+            function toggleLogin() {
+                if (isAuthed() && _authRequired) {
+                    sessionStorage.removeItem(SECRET_KEY);
+                    setAuthedUI(false);
+                } else {
+                    document
+                        .getElementById("login-modal")
+                        .classList.add("open");
+                    setTimeout(
+                        () => document.getElementById("secret-input").focus(),
+                        50,
+                    );
+                }
+            }
+            function closeLogin() {
+                document.getElementById("login-modal").classList.remove("open");
+                document.getElementById("login-err").textContent = "";
+                document.getElementById("secret-input").value = "";
+            }
+            async function submitLogin() {
+                const secret = document.getElementById("secret-input").value;
+                const err = document.getElementById("login-err");
+                try {
+                    const r = await fetch("/api/auth/check", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ secret }),
+                    });
+                    if (r.ok) {
+                        sessionStorage.setItem(SECRET_KEY, secret);
+                        setAuthedUI(true);
+                        closeLogin();
+                    } else err.textContent = "Wrong secret";
+                } catch (e) {
+                    err.textContent = e.message;
+                }
+            }
 
-let lossChart = null, eloChart = null;
-let _authRequired = false;
-let _replay = { steps: [], idx: 0, board: null, color: 'white', initFen: null, gameId: null };
-let _logTimer = null;
-let _currentView = 'bot';
+            // ═══════════════════════════════════════════════════════════════
+            // Fetch — single source of truth
+            // ═══════════════════════════════════════════════════════════════
+            const cb = (url) =>
+                url + (url.includes("?") ? "&" : "?") + "t=" + Date.now();
+            async function getJSON(url) {
+                try {
+                    const r = await fetch(cb(url));
+                    return r.ok ? await r.json() : null;
+                } catch {
+                    return null;
+                }
+            }
+            async function getText(url) {
+                try {
+                    const r = await fetch(cb(url));
+                    return r.ok ? await r.text() : null;
+                } catch {
+                    return null;
+                }
+            }
+            function parseJsonl(text) {
+                if (!text) return [];
+                return text
+                    .trim()
+                    .split("\n")
+                    .filter((l) => l)
+                    .map((l) => {
+                        try {
+                            return JSON.parse(l);
+                        } catch {
+                            return null;
+                        }
+                    })
+                    .filter((x) => x);
+            }
 
-// ═══════════════════════════════════════════════════════════════
-// Auth
-// ═══════════════════════════════════════════════════════════════
-const getSecret  = () => sessionStorage.getItem(SECRET_KEY) || '';
-const authHeader = () => ({ 'Authorization': 'Bearer ' + getSecret() });
-const isAuthed   = () => !_authRequired || !!getSecret();
+            async function fetchAll() {
+                const [
+                    trainLog,
+                    deployed,
+                    gamesResp,
+                    allGamesResp,
+                    rating,
+                    ckpts,
+                    dsets,
+                    trainer,
+                    botStatus,
+                    botConfig,
+                ] = await Promise.all([
+                    getText("/logs/train_log.jsonl"),
+                    getJSON("/logs/deployed.json"),
+                    getJSON("/api/games?n=5"),
+                    getJSON("/api/games?n=100"),
+                    getJSON("/api/rating"),
+                    getJSON("/api/checkpoints"),
+                    getJSON("/api/datasets"),
+                    getJSON("/api/train/status"),
+                    getJSON("/api/bot/status"),
+                    getJSON("/api/bot/config"),
+                ]);
+                state.trainLog = parseJsonl(trainLog);
+                state.deployed = deployed;
+                state.games = (gamesResp && gamesResp.games) || [];
+                state.allGames = (allGamesResp && allGamesResp.games) || [];
+                state.rating = rating;
+                state.checkpoints = (ckpts && ckpts.checkpoints) || [];
+                state.datasets = (dsets && dsets.datasets) || [];
+                state.trainer = trainer || { running: false };
+                state.botStatus = botStatus;
+                state.botConfig = botConfig;
+            }
 
-async function initAuth() {
-    try {
-        const r = await fetch('/api/auth/required');
-        _authRequired = (await r.json()).required;
-    } catch { _authRequired = false; }
-    document.getElementById('auth-btn').style.display = _authRequired ? '' : 'none';
-    setAuthedUI(isAuthed());
-}
-function setAuthedUI(on) {
-    const btn = document.getElementById('auth-btn');
-    btn.classList.toggle('authed', on);
-    document.getElementById('auth-label').textContent = on ? 'Logout' : 'Login';
-}
-function toggleLogin() {
-    if (isAuthed() && _authRequired) {
-        sessionStorage.removeItem(SECRET_KEY);
-        setAuthedUI(false);
-    } else {
-        document.getElementById('login-modal').classList.add('open');
-        setTimeout(() => document.getElementById('secret-input').focus(), 50);
-    }
-}
-function closeLogin() {
-    document.getElementById('login-modal').classList.remove('open');
-    document.getElementById('login-err').textContent = '';
-    document.getElementById('secret-input').value = '';
-}
-async function submitLogin() {
-    const secret = document.getElementById('secret-input').value;
-    const err = document.getElementById('login-err');
-    try {
-        const r = await fetch('/api/auth/check', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ secret }),
-        });
-        if (r.ok) { sessionStorage.setItem(SECRET_KEY, secret); setAuthedUI(true); closeLogin(); }
-        else err.textContent = 'Wrong secret';
-    } catch (e) { err.textContent = e.message; }
-}
+            // ═══════════════════════════════════════════════════════════════
+            // Render — pure functions reading from state
+            // ═══════════════════════════════════════════════════════════════
+            const $ = (id) => document.getElementById(id);
+            const fmt = (n, d = 4) => Number(n).toFixed(d);
+            const escapeHtml = (s) =>
+                String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;");
 
-// ═══════════════════════════════════════════════════════════════
-// Fetch — single source of truth
-// ═══════════════════════════════════════════════════════════════
-const cb = url => url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
-async function getJSON(url) {
-    try { const r = await fetch(cb(url)); return r.ok ? await r.json() : null; }
-    catch { return null; }
-}
-async function getText(url) {
-    try { const r = await fetch(cb(url)); return r.ok ? await r.text() : null; }
-    catch { return null; }
-}
-function parseJsonl(text) {
-    if (!text) return [];
-    return text.trim().split('\n').filter(l => l).map(l => {
-        try { return JSON.parse(l); } catch { return null; }
-    }).filter(x => x);
-}
+            function renderAll() {
+                renderStatus();
+                renderTrainerNav();
+                renderLossChart();
+                renderEloChart();
+                renderGames();
+                renderCheckpoints();
+                renderDatasets();
+                renderBaseModelSelect();
+                renderTrainerForm();
+                renderBotControls();
+            }
 
-async function fetchAll() {
-    const [trainLog, deployed, gamesResp, allGamesResp, rating, ckpts, dsets, trainer, arenas, challenge, search, gamesStatus] = await Promise.all([
-        getText('/logs/train_log.jsonl'),
-        getJSON('/logs/deployed.json'),
-        getJSON('/api/games?n=5'),
-        getJSON('/api/games?n=100'),
-        getJSON('/api/rating'),
-        getJSON('/api/checkpoints'),
-        getJSON('/api/datasets'),
-        getJSON('/api/train/status'),
-        getJSON('/api/arenas'),
-        getJSON('/api/bot/challenge/status'),
-        getJSON('/api/bot/search/config'),
-        getJSON('/api/bot/games/status'),
-    ]);
-    state.trainLog    = parseJsonl(trainLog);
-    state.deployed    = deployed;
-    state.games       = (gamesResp && gamesResp.games) || [];
-    state.allGames    = (allGamesResp && allGamesResp.games) || [];
-    state.rating      = rating;
-    state.checkpoints = (ckpts && ckpts.checkpoints) || [];
-    state.datasets    = (dsets && dsets.datasets) || [];
-    state.trainer     = trainer || { running: false };
-    state.arenas      = (arenas && arenas.arenas) || [];
-    state.challenge   = challenge;
-    state.maxDepth    = search ? search.max_depth : null;
-    state.gamesPaused = gamesStatus ? !!gamesStatus.paused : false;
-}
+            function renderStatus() {
+                const { deployed, trainLog, games } = state;
+                // bot button
+                const gamesBtn = $("games-btn");
+                const bs = state.botStatus;
+                const botPaused = bs && !bs.unreachable ? bs.paused : false;
+                const botInGame = bs && !bs.unreachable ? bs.in_game : false;
+                gamesBtn.classList.toggle("paused", botPaused);
+                gamesBtn.classList.toggle("active", !botPaused && bs && !bs.unreachable);
+                gamesBtn.title = botPaused
+                    ? "Bot paused — click to resume"
+                    : botInGame
+                      ? `Playing vs ${bs.opponent || "?"}`
+                      : "Bot active — click to pause";
 
-// ═══════════════════════════════════════════════════════════════
-// Render — pure functions reading from state
-// ═══════════════════════════════════════════════════════════════
-const $ = id => document.getElementById(id);
-const fmt = (n, d=4) => Number(n).toFixed(d);
-const escapeHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+                if (deployed) {
+                    $("s-model").textContent = (
+                        deployed.run_name || "—"
+                    ).replace(/_/g, " ");
+                    $("s-epoch").textContent = deployed.epoch ?? "—";
+                    $("s-loss").textContent =
+                        deployed.loss_policy != null
+                            ? fmt(deployed.loss_policy)
+                            : "—";
+                } else {
+                    $("s-model").textContent = "— no deploy —";
+                }
 
-function renderAll() {
-    renderStatus();
-    renderTrainerNav();
-    renderLossChart();
-    renderEloChart();
-    renderGames();
-    renderCheckpoints();
-    renderDatasets();
-    renderBaseModelSelect();
-    renderTrainerForm();
-    renderBotControls();
-}
+                // Latest train log epoch overrides display when more recent
+                if (trainLog.length) {
+                    const last = trainLog[trainLog.length - 1];
+                    if (!deployed || last.epoch > (deployed.epoch ?? -1)) {
+                        $("s-epoch").innerHTML =
+                            `${last.epoch} <span class="sub">(latest)</span>`;
+                        $("s-loss").textContent = fmt(last.loss_policy);
+                    }
+                }
 
-function renderStatus() {
-    const { deployed, trainLog, games } = state;
-    // bot button
-    const gamesBtn = $('games-btn');
-    const botActive = games.length > 0 && _recentGameAge(games) < 24 * 3600;
-    gamesBtn.classList.toggle('active', botActive && !state.gamesPaused);
-    gamesBtn.classList.toggle('paused', state.gamesPaused);
-    gamesBtn.title = state.gamesPaused ? 'Games paused — click to resume' : 'Bot active — click to pause';
+                // W/L/D filtered to deployed model — use ALL games, not just recent 5
+                const allForDeployed = deployed
+                    ? state.allGames.filter(
+                          (g) =>
+                              (g.model && g.model === deployed.run_name) ||
+                              (!g.model && g.deployed_epoch === deployed.epoch),
+                      )
+                    : state.allGames;
+                const w = allForDeployed.filter(
+                    (g) => g.result === "win",
+                ).length;
+                const l = allForDeployed.filter(
+                    (g) => g.result === "loss",
+                ).length;
+                const d = allForDeployed.filter(
+                    (g) => g.result === "draw",
+                ).length;
+                const t = w + l + d;
+                $("s-wld").innerHTML = t
+                    ? `<span class="green">${w}</span> · <span class="red">${l}</span> · ${d}`
+                    : "—";
+                $("s-winpct").textContent = t
+                    ? Math.round((100 * w) / t) + "%"
+                    : "—";
+            }
 
-    if (deployed) {
-        $('s-model').textContent = (deployed.run_name || '—').replace(/_/g, ' ');
-        $('s-epoch').textContent = deployed.epoch ?? '—';
-        $('s-loss').textContent  = deployed.loss_policy != null ? fmt(deployed.loss_policy) : '—';
-    } else {
-        $('s-model').textContent = '— no deploy —';
-    }
+            function _recentGameAge(games) {
+                const last = games[games.length - 1];
+                if (!last || !last.ts) return Infinity;
+                return (Date.now() - new Date(last.ts).getTime()) / 1000;
+            }
 
-    // Latest train log epoch overrides display when more recent
-    if (trainLog.length) {
-        const last = trainLog[trainLog.length - 1];
-        if (!deployed || last.epoch > (deployed.epoch ?? -1)) {
-            $('s-epoch').innerHTML = `${last.epoch} <span class="sub">(latest)</span>`;
-            $('s-loss').textContent = fmt(last.loss_policy);
-        }
-    }
+            function renderTrainerNav() {
+                const dot = $("dot-trainer");
+                const txt = $("trainer-text");
+                dot.classList.toggle("on", !!state.trainer.running);
+                if (state.trainer.running && state.trainer.run_name) {
+                    txt.textContent =
+                        "training " + state.trainer.run_name.replace(/_/g, " ");
+                } else {
+                    txt.textContent = state.trainer.running
+                        ? "training"
+                        : "trainer";
+                }
+            }
 
-    // W/L/D filtered to deployed model — use ALL games, not just recent 5
-    const allForDeployed = deployed
-        ? state.allGames.filter(g => (g.model && g.model === deployed.run_name) || (!g.model && g.deployed_epoch === deployed.epoch))
-        : state.allGames;
-    const w = allForDeployed.filter(g => g.result === 'win').length;
-    const l = allForDeployed.filter(g => g.result === 'loss').length;
-    const d = allForDeployed.filter(g => g.result === 'draw').length;
-    const t = w + l + d;
-    $('s-wld').innerHTML = t
-        ? `<span class="green">${w}</span> · <span class="red">${l}</span> · ${d}`
-        : '—';
-    $('s-winpct').textContent = t ? Math.round(100 * w / t) + '%' : '—';
-}
+            function renderLossChart() {
+                const e = state.trainLog;
+                if (!e.length) return;
+                const epochs = e.map((x) => x.epoch);
+                const losses = e.map((x) => x.loss_policy);
+                const valueLosses = e.map((x) => x.loss_value ?? null);
+                const hasValue = valueLosses.some((v) => v != null && v > 0);
+                const times = e.map((x) => x.seconds);
+                const depEpoch = state.deployed ? state.deployed.epoch : null;
 
-function _recentGameAge(games) {
-    const last = games[games.length - 1];
-    if (!last || !last.ts) return Infinity;
-    return (Date.now() - new Date(last.ts).getTime()) / 1000;
-}
+                if (depEpoch != null) $("dep-legend").style.display = "inline";
 
-function renderTrainerNav() {
-    const dot = $('dot-trainer');
-    const txt = $('trainer-text');
-    dot.classList.toggle('on', !!state.trainer.running);
-    if (state.trainer.running && state.trainer.run_name) {
-        txt.textContent = 'training ' + state.trainer.run_name.replace(/_/g, ' ');
-    } else {
-        txt.textContent = state.trainer.running ? 'training' : 'trainer';
-    }
-}
+                const plugin = {
+                    id: "depLine",
+                    afterDraw(chart) {
+                        if (depEpoch == null) return;
+                        const x = chart.scales.x.getPixelForValue(depEpoch);
+                        if (!Number.isFinite(x)) return;
+                        const ctx = chart.ctx;
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.moveTo(x, chart.chartArea.top);
+                        ctx.lineTo(x, chart.chartArea.bottom);
+                        ctx.strokeStyle = "#5DCAA5";
+                        ctx.lineWidth = 1.5;
+                        ctx.setLineDash([4, 3]);
+                        ctx.stroke();
+                        ctx.restore();
+                    },
+                };
 
-function renderLossChart() {
-    const e = state.trainLog;
-    if (!e.length) return;
-    const epochs       = e.map(x => x.epoch);
-    const losses       = e.map(x => x.loss_policy);
-    const valueLosses  = e.map(x => x.loss_value ?? null);
-    const hasValue     = valueLosses.some(v => v != null && v > 0);
-    const times        = e.map(x => x.seconds);
-    const depEpoch = state.deployed ? state.deployed.epoch : null;
+                if (!lossChart) {
+                    lossChart = new Chart($("loss-chart"), {
+                        plugins: [plugin],
+                        type: "line",
+                        data: {
+                            labels: epochs,
+                            datasets: [
+                                {
+                                    label: "Policy loss",
+                                    data: losses,
+                                    borderColor: "#534AB7",
+                                    backgroundColor: "rgba(83,74,183,0.1)",
+                                    fill: true,
+                                    tension: 0.3,
+                                    pointRadius: 2,
+                                    yAxisID: "y",
+                                },
+                                {
+                                    label: "Value loss",
+                                    data: valueLosses,
+                                    borderColor: "#e07040",
+                                    backgroundColor: "rgba(224,112,64,0.1)",
+                                    fill: false,
+                                    tension: 0.3,
+                                    pointRadius: 2,
+                                    yAxisID: "y",
+                                    hidden: !hasValue,
+                                },
+                                {
+                                    label: "s/epoch",
+                                    data: times,
+                                    borderColor: "#888780",
+                                    borderDash: [5, 5],
+                                    pointRadius: 1,
+                                    fill: false,
+                                    tension: 0.3,
+                                    yAxisID: "y1",
+                                },
+                            ],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { mode: "index", intersect: false },
+                            scales: {
+                                x: {
+                                    ticks: { color: "#888780" },
+                                    grid: { color: "rgba(255,255,255,0.05)" },
+                                },
+                                y: {
+                                    position: "left",
+                                    ticks: { color: "#888780" },
+                                    grid: { color: "rgba(255,255,255,0.05)" },
+                                },
+                                y1: {
+                                    position: "right",
+                                    beginAtZero: true,
+                                    ticks: { color: "#888780" },
+                                    grid: { drawOnChartArea: false },
+                                },
+                            },
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                    labels: {
+                                        color: "#888780",
+                                        boxWidth: 12,
+                                        font: { size: 11 },
+                                    },
+                                },
+                            },
+                        },
+                    });
+                } else {
+                    lossChart.data.labels = epochs;
+                    lossChart.data.datasets[0].data = losses;
+                    lossChart.data.datasets[1].data = valueLosses;
+                    lossChart.data.datasets[1].hidden = !hasValue;
+                    lossChart.data.datasets[2].data = times;
+                    lossChart.update();
+                }
+            }
 
-    if (depEpoch != null) $('dep-legend').style.display = 'inline';
+            const ELO_COLORS = [
+                "#534AB7",
+                "#5DCAA5",
+                "#888780",
+                "#e07040",
+                "#c084fc",
+            ];
+            function renderEloChart() {
+                const r = state.rating;
+                if (!r || !r.history || !r.history.length) return;
+                $("elo-h").style.display = "";
+                $("elo-legend").style.display = "";
+                $("elo-wrap").style.display = "";
+                $("elo-legend").innerHTML = r.history
+                    .map(
+                        (p, i) =>
+                            `<span><span class="legend-dot" style="background:${ELO_COLORS[i % 5]}"></span>${escapeHtml(p.name)}</span>`,
+                    )
+                    .join("");
 
-    const plugin = {
-        id: 'depLine',
-        afterDraw(chart) {
-            if (depEpoch == null) return;
-            const x = chart.scales.x.getPixelForValue(depEpoch);
-            if (!Number.isFinite(x)) return;
-            const ctx = chart.ctx;
-            ctx.save();
-            ctx.beginPath(); ctx.moveTo(x, chart.chartArea.top); ctx.lineTo(x, chart.chartArea.bottom);
-            ctx.strokeStyle = '#5DCAA5'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
-            ctx.stroke(); ctx.restore();
-        },
-    };
+                const allDates = new Set();
+                for (const perf of r.history) {
+                    for (const [y, m, d] of perf.points) {
+                        allDates.add(`${y}-${m}-${d}`);
+                    }
+                }
+                const sortedKeys = Array.from(allDates).sort((a, b) => {
+                    const [ay, am, ad] = a.split("-").map(Number);
+                    const [by, bm, bd] = b.split("-").map(Number);
+                    return new Date(ay, am, ad) - new Date(by, bm, bd);
+                });
+                const labels = sortedKeys.map((k) => {
+                    const [y, m, d] = k.split("-").map(Number);
+                    return new Date(y, m, d).toLocaleDateString("en", {
+                        month: "short",
+                        day: "numeric",
+                    });
+                });
 
-    if (!lossChart) {
-        lossChart = new Chart($('loss-chart'), {
-            plugins: [plugin],
-            type: 'line',
-            data: { labels: epochs, datasets: [
-                { label: 'Policy loss', data: losses,      borderColor: '#534AB7', backgroundColor: 'rgba(83,74,183,0.1)', fill: true,  tension: 0.3, pointRadius: 2, yAxisID: 'y' },
-                { label: 'Value loss',  data: valueLosses, borderColor: '#e07040', backgroundColor: 'rgba(224,112,64,0.1)', fill: false, tension: 0.3, pointRadius: 2, yAxisID: 'y', hidden: !hasValue },
-                { label: 's/epoch',     data: times,       borderColor: '#888780', borderDash: [5,5], pointRadius: 1, fill: false, tension: 0.3, yAxisID: 'y1' },
-            ]},
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                scales: {
-                    x: { ticks: { color: '#888780' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    y: { position: 'left', ticks: { color: '#888780' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    y1: { position: 'right', beginAtZero: true, ticks: { color: '#888780' }, grid: { drawOnChartArea: false } },
-                },
-                plugins: { legend: { display: true, labels: { color: '#888780', boxWidth: 12, font: { size: 11 } } } },
-            },
-        });
-    } else {
-        lossChart.data.labels = epochs;
-        lossChart.data.datasets[0].data = losses;
-        lossChart.data.datasets[1].data = valueLosses;
-        lossChart.data.datasets[1].hidden = !hasValue;
-        lossChart.data.datasets[2].data = times;
-        lossChart.update();
-    }
-}
+                const datasets = r.history.map((perf, i) => {
+                    const ratingByDate = {};
+                    for (const [y, m, d, rating] of perf.points) {
+                        ratingByDate[`${y}-${m}-${d}`] = rating;
+                    }
+                    return {
+                        label: perf.name,
+                        data: sortedKeys.map((k) => ratingByDate[k] ?? null),
+                        borderColor: ELO_COLORS[i % 5],
+                        backgroundColor: "transparent",
+                        tension: 0.3,
+                        pointRadius: perf.points.length < 30 ? 3 : 1,
+                        borderWidth: 2,
+                        spanGaps: true,
+                    };
+                });
 
-const ELO_COLORS = ['#534AB7', '#5DCAA5', '#888780', '#e07040', '#c084fc'];
-function renderEloChart() {
-    const r = state.rating;
-    if (!r || !r.history || !r.history.length) return;
-    $('elo-h').style.display = '';
-    $('elo-legend').style.display = '';
-    $('elo-wrap').style.display = '';
-    $('elo-legend').innerHTML = r.history.map((p, i) =>
-        `<span><span class="legend-dot" style="background:${ELO_COLORS[i % 5]}"></span>${escapeHtml(p.name)}</span>`).join('');
+                if (!eloChart) {
+                    eloChart = new Chart($("elo-chart"), {
+                        type: "line",
+                        data: { labels, datasets },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { mode: "index", intersect: false },
+                            scales: {
+                                x: {
+                                    ticks: {
+                                        color: "#888780",
+                                        maxTicksLimit: 10,
+                                        maxRotation: 0,
+                                    },
+                                    grid: { color: "rgba(255,255,255,0.05)" },
+                                },
+                                y: {
+                                    ticks: { color: "#888780" },
+                                    grid: { color: "rgba(255,255,255,0.05)" },
+                                },
+                            },
+                            plugins: { legend: { display: false } },
+                        },
+                    });
+                } else {
+                    eloChart.data.labels = labels;
+                    eloChart.data.datasets = datasets;
+                    eloChart.update();
+                }
+            }
 
-    const allDates = new Set();
-    for (const perf of r.history) {
-        for (const [y, m, d] of perf.points) {
-            allDates.add(`${y}-${m}-${d}`);
-        }
-    }
-    const sortedKeys = Array.from(allDates).sort((a, b) => {
-        const [ay, am, ad] = a.split('-').map(Number);
-        const [by, bm, bd] = b.split('-').map(Number);
-        return new Date(ay, am, ad) - new Date(by, bm, bd);
-    });
-    const labels = sortedKeys.map(k => {
-        const [y, m, d] = k.split('-').map(Number);
-        return new Date(y, m, d).toLocaleDateString('en', { month: 'short', day: 'numeric' });
-    });
+            function badgeHtml(result) {
+                const c = result || "draw";
+                const ch = (result || "?")[0].toUpperCase();
+                return `<span class="badge ${c}">${ch}</span>`;
+            }
 
-    const datasets = r.history.map((perf, i) => {
-        const ratingByDate = {};
-        for (const [y, m, d, rating] of perf.points) {
-            ratingByDate[`${y}-${m}-${d}`] = rating;
-        }
-        return {
-            label: perf.name,
-            data: sortedKeys.map(k => ratingByDate[k] ?? null),
-            borderColor: ELO_COLORS[i % 5],
-            backgroundColor: 'transparent',
-            tension: 0.3, pointRadius: perf.points.length < 30 ? 3 : 1, borderWidth: 2,
-            spanGaps: true,
-        };
-    });
+            function tcBadgeHtml(clock_limit, clock_increment) {
+                if (!clock_limit) return "";
+                // Legacy logs stored milliseconds; normalize to seconds
+                const lim_s = clock_limit > 10000 ? clock_limit / 1000 : clock_limit;
+                const inc_s = (clock_increment || 0) > 1000 ? clock_increment / 1000 : (clock_increment || 0);
+                const total = lim_s + inc_s;
+                let tc = "?", cls = "tc", name = "";
+                if (total < 180)       { tc = "💥"; cls = "tc bullet";    name = "bullet"; }
+                else if (total < 600)  { tc = "⚡️"; cls = "tc blitz";     name = "blitz"; }
+                else if (total < 1800) { tc = "🐇"; cls = "tc rapid";     name = "rapid"; }
+                else                   { tc = "🐢"; cls = "tc classical";  name = "classical"; }
+                const mins = Math.floor(lim_s / 60);
+                const inc  = Math.round(inc_s);
+                return `<span class="${cls}" title="${mins}+${inc} ${name}">${tc}</span>`;
+            }
 
-    if (!eloChart) {
-        eloChart = new Chart($('elo-chart'), {
-            type: 'line', data: { labels, datasets },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                scales: {
-                    x: { ticks: { color: '#888780', maxTicksLimit: 10, maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                    y: { ticks: { color: '#888780' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                },
-                plugins: { legend: { display: false } },
-            },
-        });
-    } else {
-        eloChart.data.labels = labels;
-        eloChart.data.datasets = datasets;
-        eloChart.update();
-    }
-}
+            function statsVs(name) {
+                if (!name) return '';
+                const opp = name.toLowerCase();
+                const gs = state.allGames.filter(g => (g.opponent || '').toLowerCase() === opp);
+                if (!gs.length) return '';
+                const w = gs.filter(g => g.result === 'win').length;
+                const l = gs.filter(g => g.result === 'loss').length;
+                const d = gs.filter(g => g.result === 'draw').length;
+                return ` <span class="muted" style="font-size:11px">${w}W ${d}D ${l}L</span>`;
+            }
 
-function badgeHtml(result) {
-    const c = result || 'draw';
-    const ch = (result || '?')[0].toUpperCase();
-    return `<span class="badge ${c}">${ch}</span>`;
-}
-
-function tcBadgeHtml(clock_limit, clock_increment) {
-    if (!clock_limit) return '';
-    const total = clock_limit + (clock_increment || 0);
-    let tc = '?';
-    let cls = 'tc';
-    if (total < 180) { tc = '●'; cls = 'tc bullet'; }
-    else if (total < 600) { tc = '⚡'; cls = 'tc blitz'; }
-    else if (total < 1800) { tc = '◆'; cls = 'tc rapid'; }
-    else { tc = '♔'; cls = 'tc classical'; }
-    return `<span class="${cls}" title="${clock_limit}+${clock_increment}">${tc}</span>`;
-}
-
-function renderGames() {
-    const games = state.games;
-    $('games-count').textContent = games.length ? `(${games.length})` : '';
-    if (!games.length) {
-        $('games-wrap').innerHTML = '<span class="muted">No games yet</span>';
-        return;
-    }
-    const recent = games.slice().reverse().slice(0, 5);
-    const rows = recent.map(g => {
-        const opp = g.opponent_rating
-            ? `${escapeHtml(g.opponent || '?')} <span class="muted">(${g.opponent_rating})</span>`
-            : escapeHtml(g.opponent || '?');
-        const side = g.color === 'white' ? '○' : '●';
-        const ts = g.ts ? g.ts.replace('T', ' ').slice(5, 16) : '';
-        const tc = tcBadgeHtml(g.clock_limit, g.clock_increment);
-        const replay = g.has_trace
-            ? `<a class="muted" href="#" onclick="event.preventDefault();selectReplayGame('${g.game_id}')" title="Replay" style="color:var(--green)">▶</a>`
-            : '';
-        const link = `<a class="muted" href="https://lichess.org/${g.game_id}" target="_blank" rel="noopener">↗</a>`;
-        const cls = g.has_trace ? 'clickable' : '';
-        const handler = g.has_trace ? `onclick="selectReplayGame('${g.game_id}')"` : '';
-        return `<tr class="${cls}" ${handler}>
-            <td>${badgeHtml(g.result)}</td>
-            <td>${tc}</td>
-            <td>${opp}</td>
-            <td style="color:var(--text-muted)">${side}</td>
-            <td class="muted">${ts}</td>
-            <td style="text-align:right">${replay} ${link}</td>
+            function renderGames() {
+                const games = state.games;
+                $("games-count").textContent = games.length
+                    ? `(${games.length})`
+                    : "";
+                if (!games.length) {
+                    $("games-wrap").innerHTML =
+                        '<span class="muted">No games yet</span>';
+                    return;
+                }
+                const recent = games.slice().reverse().slice(0, 5);
+                const rows = recent
+                    .map((g) => {
+                        const oppName = escapeHtml(g.opponent || "?");
+                        const opp = g.opponent_rating
+                            ? `${oppName} <span class="muted">(${g.opponent_rating})</span>`
+                            : oppName;
+                        const side = g.color === "white" ? "○" : "●";
+                        const ts = g.ts
+                            ? g.ts.replace("T", " ").slice(5, 16)
+                            : "";
+                        const tc = tcBadgeHtml(
+                            g.clock_limit,
+                            g.clock_increment,
+                        );
+                        const replay = "";
+                        const link = `<a class="muted" href="https://lichess.org/${g.game_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()">↗</a>`;
+                        const cls = g.has_trace ? "clickable" : "";
+                        const handler = g.has_trace
+                            ? `onclick="selectReplayGame('${g.game_id}')"`
+                            : "";
+                        return `<tr class="${cls}" ${handler}>
+            <td style="width:1%;white-space:nowrap;padding-right:4px">${badgeHtml(g.result)}</td>
+            <td style="width:1%;white-space:nowrap;padding-right:4px">${tc}</td>
+            <td>${opp}${statsVs(g.opponent)}</td>
+            <td style="color:var(--text-muted);width:1%;white-space:nowrap">${side}</td>
+            <td class="muted col-hide">${ts}</td>
+            <td style="width:1%;white-space:nowrap;padding-left:16px;text-align:right">${replay}&nbsp;${link}</td>
         </tr>`;
-    }).join('');
-    $('games-wrap').innerHTML = `<table>
-        <thead><tr><th></th><th></th><th>Opponent</th><th>Side</th><th>Date</th><th></th></tr></thead>
+                    })
+                    .join("");
+                $("games-wrap").innerHTML = `<table>
+        <thead><tr><th></th><th></th><th>Opponent</th><th>Side</th><th class="col-hide">Date</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table>`;
-}
+            }
 
-function ckptParamCount(trunkSizes) {
-    if (!trunkSizes || !trunkSizes.length) return null;
-    const INPUT = 1280, MOVES = 1924;
-    let n = INPUT * trunkSizes[0] + trunkSizes[0];
-    for (let i = 1; i < trunkSizes.length; i++)
-        n += trunkSizes[i-1] * trunkSizes[i] + trunkSizes[i];
-    const last = trunkSizes[trunkSizes.length - 1];
-    const hw = Math.max(32, Math.floor(last / 4));
-    n += last * hw + hw + hw + 1 + last * MOVES + MOVES;
-    return n;
-}
-function fmtParams(n) {
-    if (n == null) return '';
-    return n >= 1e6 ? (n/1e6).toFixed(2) + 'M' : Math.round(n/1000) + 'K';
-}
-function parseTrunk(s) {
-    return (s || '').split(',').map(x => parseInt(x.trim(), 10)).filter(n => Number.isFinite(n) && n > 0);
-}
+            function ckptParamCount(trunkSizes) {
+                if (!trunkSizes || !trunkSizes.length) return null;
+                const INPUT = 1280,
+                    MOVES = 1924;
+                let n = INPUT * trunkSizes[0] + trunkSizes[0];
+                for (let i = 1; i < trunkSizes.length; i++)
+                    n += trunkSizes[i - 1] * trunkSizes[i] + trunkSizes[i];
+                const last = trunkSizes[trunkSizes.length - 1];
+                const hw = Math.max(32, Math.floor(last / 4));
+                n += last * hw + hw + hw + 1 + last * MOVES + MOVES;
+                return n;
+            }
+            function fmtParams(n) {
+                if (n == null) return "";
+                return n >= 1e6
+                    ? (n / 1e6).toFixed(2) + "M"
+                    : Math.round(n / 1000) + "K";
+            }
+            function parseTrunk(s) {
+                return (s || "")
+                    .split(",")
+                    .map((x) => parseInt(x.trim(), 10))
+                    .filter((n) => Number.isFinite(n) && n > 0);
+            }
 
-function renderCheckpoints() {
-    const list = state.checkpoints;
-    const deployed = state.deployed ? state.deployed.run_name : null;
-    if (!list.length) {
-        $('ckpt-wrap').innerHTML = '<span class="muted">No checkpoints yet — train one below.</span>';
-        return;
-    }
-    // games-by-name index
-    const byName = {};
-    for (const g of state.allGames) {
-        let k = g.model || null;
-        if (!k) {
-            // Use deployed_epoch as identifier, or current deployed if none
-            k = g.deployed_epoch != null ? 'epoch ' + g.deployed_epoch : 
-               (state.deployed ? state.deployed.run_name : null);
-        }
-        if (!k) continue;
-        (byName[k] = byName[k] || { w:0, l:0, d:0 });
-        byName[k][g.result === 'win' ? 'w' : g.result === 'loss' ? 'l' : 'd']++;
-    }
+            function renderCheckpoints() {
+                const list = state.checkpoints;
+                const deployed = state.deployed
+                    ? state.deployed.run_name
+                    : null;
+                if (!list.length) {
+                    $("ckpt-wrap").innerHTML =
+                        '<span class="muted">No checkpoints yet — train one below.</span>';
+                    return;
+                }
+                // games-by-name index
+                const byName = {};
+                for (const g of state.allGames) {
+                    let k = g.model || null;
+                    if (!k) {
+                        // Use deployed_epoch as identifier, or current deployed if none
+                        k =
+                            g.deployed_epoch != null
+                                ? "epoch " + g.deployed_epoch
+                                : state.deployed
+                                  ? state.deployed.run_name
+                                  : null;
+                    }
+                    if (!k) continue;
+                    byName[k] = byName[k] || { w: 0, l: 0, d: 0 };
+                    byName[k][
+                        g.result === "win"
+                            ? "w"
+                            : g.result === "loss"
+                              ? "l"
+                              : "d"
+                    ]++;
+                }
 
-    // Build lookup: checkpoint name → display name (readable)
-    const ckptNames = {};
-    for (const c of state.checkpoints) {
-        const rn = c.run_name || c.name;
-        if (rn) ckptNames[rn] = (c.run_name || c.name).replace(/_/g, ' ');
-    }
+                // Build lookup: checkpoint name → display name (readable)
+                const ckptNames = {};
+                for (const c of state.checkpoints) {
+                    const rn = c.run_name || c.name;
+                    if (rn)
+                        ckptNames[rn] = (c.run_name || c.name).replace(
+                            /_/g,
+                            " ",
+                        );
+                }
 
-    const rows = list.slice().reverse().map(c => {
-        const name = c.name;
-        const isDep = name === deployed;
-        const inProg = !!c.in_progress;
-        const display = (c.run_name || name).replace(/_/g, ' ');
-        const trunk = parseTrunk(c.trunk_sizes || '');
-        const arch = trunk.length ? trunk.join('→') : '—';
-        const params = fmtParams(ckptParamCount(trunk));
-        const epochs = c.epochs ?? '—';
-        const loss = c.loss_policy != null ? fmt(c.loss_policy) : '—';
-        const ds = c.dataset || '—';
-        const date = c.completed_at ? c.completed_at.slice(0, 10) : '';
-        const r = byName[c.run_name || name] || byName['epoch ' + (c.epochs || '')] || byName[name];
-        const wld = r ? `<span class="green">${r.w}</span>·<span class="red">${r.l}</span>·${r.d}` : '—';
-        const tags = [
-            isDep ? '<span class="badge deployed">deployed</span>' : '',
-            inProg ? '<span class="badge training">training</span>' : '',
-        ].filter(Boolean).join(' ');
-        const deployBtn = isDep
-            ? '<button class="btn" disabled>✓</button>'
-            : `<button class="btn primary" onclick="deployCkpt('${name}')">Deploy</button>`;
-        const delBtn = (isDep || name === 'latest')
-            ? ''
-            : `<button class="btn danger" onclick="deleteCkpt('${name}')">Delete</button>`;
-        return `<tr class="${isDep ? 'row-deployed' : ''}">
+                const rows = list
+                    .slice()
+                    .reverse()
+                    .map((c) => {
+                        const name = c.name;
+                        const isDep = name === deployed;
+                        const inProg = !!c.in_progress;
+                        const display = (c.run_name || name).replace(/_/g, " ");
+                        const trunk = parseTrunk(c.trunk_sizes || "");
+                        const arch = trunk.length ? trunk.join("→") : "—";
+                        const params = fmtParams(ckptParamCount(trunk));
+                        const epochs = c.epochs ?? "—";
+                        const loss =
+                            c.loss_policy != null ? fmt(c.loss_policy) : "—";
+                        const ds = c.dataset || "—";
+                        const date = c.completed_at
+                            ? c.completed_at.slice(0, 10)
+                            : "";
+                        const r =
+                            byName[c.run_name || name] ||
+                            byName["epoch " + (c.epochs || "")] ||
+                            byName[name];
+                        const wld = r
+                            ? `<span class="green">${r.w}</span>·<span class="red">${r.l}</span>·${r.d}`
+                            : "—";
+                        const tags = [
+                            isDep
+                                ? '<span class="badge deployed">deployed</span>'
+                                : "",
+                            inProg
+                                ? '<span class="badge training">training</span>'
+                                : "",
+                        ]
+                            .filter(Boolean)
+                            .join(" ");
+                        const deployBtn = isDep
+                            ? '<button class="btn" disabled>✓</button>'
+                            : `<button class="btn primary" onclick="deployCkpt('${name}')">Deploy</button>`;
+                        const delBtn =
+                            isDep || name === "latest"
+                                ? ""
+                                : `<button class="btn danger" onclick="deleteCkpt('${name}')">Delete</button>`;
+                        return `<tr class="${isDep ? "row-deployed" : ""}">
             <td><span class="mono">${escapeHtml(display)}</span> ${tags}</td>
             <td class="mono col-hide">${arch}</td>
             <td class="muted col-hide">${params}</td>
@@ -1035,423 +2087,613 @@ function renderCheckpoints() {
             <td class="muted col-hide">${date}</td>
             <td style="text-align:right;white-space:nowrap">${deployBtn} ${delBtn}</td>
         </tr>`;
-    }).join('');
-    $('ckpt-wrap').innerHTML = `<table>
+                    })
+                    .join("");
+                $("ckpt-wrap").innerHTML = `<table>
         <thead><tr>
             <th>Name</th><th class="col-hide">Arch</th><th class="col-hide">Params</th><th class="col-hide">Epochs</th><th>Loss</th><th class="col-hide">Dataset</th><th>W·L·D</th><th class="col-hide">Date</th><th></th>
         </tr></thead>
         <tbody>${rows}</tbody></table>`;
-}
+            }
 
-function renderDatasets() {
-    const list = state.datasets;
-    if (!list.length) {
-        $('ds-wrap').innerHTML = '<span class="muted">No datasets.</span>';
-        return;
-    }
-    const rows = list.map(d => {
-        const recs = d.n_records ? `${(d.n_records/1e6).toFixed(2)}M records` : '—';
-        const ver  = d.version != null ? `v${d.version}` : '—';
-        const masked = d.version >= 2;
-        const verBadge = `<span class="badge ${masked ? 'badge-ok' : 'badge-warn'}" title="${masked ? 'legal-move masking' : 'no legal-move masking — regenerate'}">${ver}</span>`;
-        return `<tr>
+            function renderDatasets() {
+                const list = state.datasets;
+                if (!list.length) {
+                    $("ds-wrap").innerHTML =
+                        '<span class="muted">No datasets.</span>';
+                    return;
+                }
+                const rows = list
+                    .map((d) => {
+                        const recs = d.n_records
+                            ? `${(d.n_records / 1e6).toFixed(2)}M records`
+                            : "—";
+                        const ver = d.version != null ? `v${d.version}` : "—";
+                        const masked = d.version >= 2;
+                        const verBadge = `<span class="badge ${masked ? "badge-ok" : "badge-warn"}" title="${masked ? "legal-move masking" : "no legal-move masking — regenerate"}">${ver}</span>`;
+                        return `<tr>
             <td class="mono">${escapeHtml(d.name)}</td>
-            <td class="muted">${escapeHtml(d.file || '')}</td>
+            <td class="muted">${escapeHtml(d.file || "")}</td>
             <td class="muted">${recs}</td>
             <td>${verBadge}</td>
             <td style="text-align:right">
                 <button class="btn danger" onclick="deleteDataset('${d.name}')">Delete</button>
             </td>
         </tr>`;
-    }).join('');
-    $('ds-wrap').innerHTML = `<table>
+                    })
+                    .join("");
+                $("ds-wrap").innerHTML = `<table>
         <thead><tr><th>Name</th><th>File</th><th>Size</th><th>Format</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table>`;
 
-    // Populate train form dataset select
-    const sel = $('t-dataset');
-    const prev = sel.value;
-    sel.innerHTML = list.map(d => `<option value="${escapeHtml(d.file)}">${escapeHtml(d.name)}</option>`).join('');
-    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
-}
+                // Populate train form dataset select
+                const sel = $("t-dataset");
+                const prev = sel.value;
+                sel.innerHTML = list
+                    .map(
+                        (d) =>
+                            `<option value="${escapeHtml(d.file)}">${escapeHtml(d.name)}</option>`,
+                    )
+                    .join("");
+                if (prev && [...sel.options].some((o) => o.value === prev))
+                    sel.value = prev;
+            }
 
-function renderBaseModelSelect() {
-    const sel = $('t-base');
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">— fresh —</option>' +
-        state.checkpoints.slice().reverse()
-            .filter(c => c.name !== 'latest')
-            .map(c => `<option value="${c.name}">${escapeHtml((c.run_name || c.name).replace(/_/g, ' '))}</option>`)
-            .join('');
-    if (prev && [...sel.options].some(o => o.value === prev)) sel.value = prev;
-}
+            function renderBaseModelSelect() {
+                const sel = $("t-base");
+                const prev = sel.value;
+                sel.innerHTML =
+                    '<option value="">— fresh —</option>' +
+                    state.checkpoints
+                        .slice()
+                        .reverse()
+                        .filter((c) => c.name !== "latest")
+                        .map(
+                            (c) =>
+                                `<option value="${c.name}">${escapeHtml((c.run_name || c.name).replace(/_/g, " "))}</option>`,
+                        )
+                        .join("");
+                if (prev && [...sel.options].some((o) => o.value === prev))
+                    sel.value = prev;
+            }
 
-function renderTrainerForm() {
-    const t = state.trainer;
-    $('t-start').disabled = t.running;
-    $('t-stop').style.display = t.running ? '' : 'none';
-}
+            function renderTrainerForm() {
+                const t = state.trainer;
+                $("t-start").disabled = t.running;
+                $("t-stop").style.display = t.running ? "" : "none";
+            }
 
-function renderBotControls() {
-    // Challenge button
-    const ch = state.challenge;
-    const btn = $('ch-btn');
-    if (!ch || ch.unreachable) {
-        btn.textContent = 'Challenges'; btn.disabled = true;
-    } else {
-        btn.textContent = ch.paused ? 'Resume challenges' : 'Pause challenges';
-        btn.disabled = false;
-    }
-    // Max ply
-    const inp = $('maxply');
-    if (state.maxDepth != null && document.activeElement !== inp) {
-        inp.value = state.maxDepth;
-    }
-}
+            function renderBotControls() {
+                const bs = state.botStatus;
+                const bc = state.botConfig;
+                const btn = $("bot-pause-btn");
+                const statusLine = $("bot-status-line");
 
-// ═══════════════════════════════════════════════════════════════
-// Actions (auth-gated)
-// ═══════════════════════════════════════════════════════════════
-function _ensureAuth() {
-    if (_authRequired && !getSecret()) {
-        document.getElementById('login-modal').classList.add('open');
-        setTimeout(() => $('secret-input').focus(), 50);
-        return false;
-    }
-    return true;
-}
-async function _post(url, body) {
-    return fetch(url, {
-        method: 'POST',
-        headers: { ...authHeader(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
-        body: body ? JSON.stringify(body) : undefined,
-    });
-}
+                if (bs && !bs.unreachable) {
+                    btn.disabled = false;
+                    btn.textContent = bs.paused ? "Resume bot" : "Pause bot";
+                    const quotaText = `${bs.games_today ?? 0}/${bs.daily_quota ?? 100} games today`;
+                    const tcText = bs.next_tc ? `next TC: ${bs.next_tc}` : "";
+                    const stateText = bs.in_game
+                        ? `playing vs ${escapeHtml(bs.opponent || "?")}`
+                        : bs.paused
+                          ? "paused"
+                          : bs.lockout_seconds > 0
+                            ? `rate-limited ${bs.lockout_seconds}s`
+                            : "idle";
+                    const parts = [stateText, quotaText, tcText].filter(
+                        Boolean,
+                    );
+                    statusLine.innerHTML = `<span class="muted">${parts.join(" · ")}</span>`;
+                } else {
+                    btn.disabled = true;
+                    btn.textContent = "Pause bot";
+                    statusLine.innerHTML =
+                        '<span class="muted">Bot unreachable</span>';
+                }
 
-async function deployCkpt(name) {
-    if (!_ensureAuth()) return;
-    try {
-        const r = await _post('/api/deploy', { model: name });
-        const d = await r.json();
-        if (!d.ok) alert('Error: ' + (d.error || r.status));
-    } catch (e) { alert('Error: ' + e.message); }
-    await refreshAndRender();
-}
-async function deleteCkpt(name) {
-    if (!confirm(`Delete checkpoint "${name.replace(/_/g, ' ')}"?`)) return;
-    if (!_ensureAuth()) return;
-    try {
-        const r = await fetch(`/api/checkpoints/${encodeURIComponent(name)}`, {
-            method: 'DELETE', headers: authHeader(),
-        });
-        const d = await r.json();
-        if (!d.ok) alert('Error: ' + (d.error || r.status));
-    } catch (e) { alert('Error: ' + e.message); }
-    await refreshAndRender();
-}
-async function deleteDataset(name) {
-    if (!confirm(`Delete dataset "${name}"?`)) return;
-    if (!_ensureAuth()) return;
-    try {
-        const r = await fetch(`/api/datasets/${encodeURIComponent(name)}`, {
-            method: 'DELETE', headers: authHeader(),
-        });
-        const d = await r.json();
-        if (!d.ok) alert('Error: ' + (d.error || r.status));
-    } catch (e) { alert('Error: ' + e.message); }
-    await refreshAndRender();
-}
+                if (bc) {
+                    const setIfNotFocused = (id, val) => {
+                        const el = $(id);
+                        document.activeElement !== el && (el.value = val);
+                    };
+                    setIfNotFocused("cfg-depth", bc.max_depth ?? 3);
+                    setIfNotFocused("cfg-rlo", bc.rating_low ?? -400);
+                    setIfNotFocused("cfg-rhi", bc.rating_high ?? 1000);
+                    setIfNotFocused("cfg-quota", bc.daily_quota ?? 100);
+                    setIfNotFocused(
+                        "cfg-gap",
+                        bc.min_challenge_gap_seconds ?? 60,
+                    );
+                }
+            }
 
-async function startTraining() {
-    if (!_ensureAuth()) return;
-    const fb = $('t-fb');
-    fb.textContent = 'Starting…';
-    const params = {
-        dataset:      $('t-dataset').value,
-        base_model:   $('t-base').value,
-        epochs:       parseInt($('t-epochs').value),
-        batch_size:   parseInt($('t-batch').value),
-        lr:           $('t-lr').value,
-        lr_min:       $('t-lr-min').value,
-        weight_decay: parseFloat($('t-wd').value),
-        value_weight: parseFloat($('t-vw').value),
-        eval_games:   parseInt($('t-eval').value),
-        trunk_sizes:  $('t-trunk').value,
-        dropout:      parseFloat($('t-drop').value),
-    };
-    try {
-        const r = await _post('/api/train/start', params);
-        const d = await r.json();
-        fb.textContent = d.ok ? `Started — ${d.container_id}` : 'Error: ' + d.error;
-    } catch (e) { fb.textContent = 'Error: ' + e.message; }
-    setTimeout(refreshAndRender, 1000);
-}
-async function stopTraining() {
-    if (!_ensureAuth()) return;
-    const fb = $('t-fb');
-    fb.textContent = 'Stopping…';
-    try {
-        const r = await _post('/api/train/stop');
-        const d = await r.json();
-        fb.textContent = d.ok ? 'Stopped' : 'Error: ' + d.error;
-    } catch (e) { fb.textContent = 'Error: ' + e.message; }
-    setTimeout(refreshAndRender, 1000);
-}
-
-async function restartBot() {
-    if (!_ensureAuth()) return;
-    _bcMsg('Restarting bot…');
-    try { const r = await _post('/api/bot/restart'); const d = await r.json(); _bcMsg(d.ok ? 'Bot restarted.' : (d.error || 'Error'), !d.ok); }
-    catch (e) { _bcMsg(e.message, true); }
-}
-async function restartDashboard() {
-    if (!_ensureAuth()) return;
-    _bcMsg('Restarting dashboard…');
-    try { await _post('/api/dashboard/restart'); _bcMsg('Reloading in 3s…'); setTimeout(() => location.reload(), 3000); }
-    catch (e) { _bcMsg(e.message, true); }
-}
-async function toggleGames() {
-    if (!_ensureAuth()) return;
-    const action = state.gamesPaused ? 'resume' : 'pause';
-    try {
-        const r = await _post(`/api/bot/games/${action}`);
-        const d = await r.json();
-        if (!d.ok) _bcMsg(d.error || 'Error', true);
-    } catch (e) { _bcMsg(e.message, true); }
-    await refreshAndRender();
-}
-async function toggleChallenges() {
-    if (!_ensureAuth()) return;
-    const ch = state.challenge;
-    if (!ch || ch.unreachable) return;
-    const action = ch.paused ? 'resume' : 'pause';
-    try {
-        const r = await _post(`/api/bot/challenge/${action}`);
-        const d = await r.json();
-        if (!d.ok) _bcMsg(d.error || 'Error', true);
-    } catch (e) { _bcMsg(e.message, true); }
-    await refreshAndRender();
-}
-async function setMaxPly() {
-    if (!_ensureAuth()) return;
-    const v = parseInt($('maxply').value, 10);
-    if (!Number.isFinite(v) || v < 1) { _bcMsg('Invalid', true); return; }
-    try {
-        const r = await _post('/api/bot/search/config', { max_depth: v });
-        const d = await r.json();
-        _bcMsg(d.ok ? `max_depth = ${d.max_depth}` : (d.error || 'Error'), !d.ok);
-    } catch (e) { _bcMsg(e.message, true); }
-}
-function _bcMsg(msg, isErr) {
-    const el = $('bc-msg');
-    el.textContent = msg;
-    el.style.color = isErr ? 'var(--red)' : 'var(--text-muted)';
-    if (msg) setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 4000);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Bot logs (lazy)
-// ═══════════════════════════════════════════════════════════════
-function _logLevel(line) {
-    if (/\[ ?Error/i.test(line) || /ERROR/.test(line)) return 'err';
-    if (/\[ ?Warn/i.test(line)  || /WARNING/.test(line)) return 'warn';
-    if (/\[ ?Info/i.test(line)) return 'info';
-    return '';
-}
-async function fetchBotLogs() {
-    clearTimeout(_logTimer);
-    try {
-        const r = await fetch('/api/bot/logs?n=20');
-        const d = await r.json();
-        const pane = $('bot-log');
-        if (!d.lines || !d.lines.length) {
-            pane.innerHTML = `<span class="log-empty">${d.running === false ? 'Bot not running' : 'No logs'}</span>`;
-        } else {
-            const clean = s => s.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/, '').replace(/\x1b\[[0-9;]*m/g, '');
-            pane.innerHTML = d.lines.map(l => {
-                const t = clean(l);
-                return `<div class="log-line ${_logLevel(t)}">${escapeHtml(t)}</div>`;
-            }).join('');
-            pane.scrollTop = pane.scrollHeight;
-        }
-    } catch {}
-    const open = document.querySelector('details.logs')?.open;
-    if (open) _logTimer = setTimeout(fetchBotLogs, 5000);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// Replay
-// ═══════════════════════════════════════════════════════════════
-function closeReplay() {
-    const v = document.getElementById('replay-viewer');
-    if (v) v.style.display = 'none';
-    _replay.steps = [];
-    _replay.gameId = null;
-}
-
-async function selectReplayGame(gameId) {
-    const v = document.getElementById('replay-viewer');
-    if (v) v.style.display = '';
-    v && v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    _replay.gameId = gameId;
-    try {
-        const r = await fetch(`/api/games/${gameId}/trace`);
-        if (!r.ok) return;
-        const lines = (await r.text()).trim().split('\n').filter(l => l.trim());
-        if (!lines.length) return;
-        const header = JSON.parse(lines[0]);
-        _replay.initFen = header.initial_fen || null;
-        _replay.color   = header.color || 'white';
-        _replay.steps   = lines.slice(1).map(l => JSON.parse(l));
-        _replay.idx     = 0;
-
-        const g = state.allGames.find(x => x.game_id === gameId);
-        $('r-badge').className = 'badge ' + (g ? g.result : 'draw');
-        $('r-badge').textContent = (g && g.result ? g.result[0].toUpperCase() : '?');
-        $('r-title').textContent = `vs ${header.opponent || '?'}`;
-        $('r-sub').textContent = `as ${_replay.color} · ${_replay.steps.length} traced moves`;
-        $('r-link').href = `https://lichess.org/${gameId}`;
-        $('replay-mid').style.display = '';
-        $('replay-nn').style.display = '';
-
-        if (window.Chessboard) {
-            if (!_replay.board) {
-                _replay.board = Chessboard('replay-board', {
-                    pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png',
-                    orientation: _replay.color,
-                    position: 'start',
+            // ═══════════════════════════════════════════════════════════════
+            // Actions (auth-gated)
+            // ═══════════════════════════════════════════════════════════════
+            function _ensureAuth() {
+                if (_authRequired && !getSecret()) {
+                    document
+                        .getElementById("login-modal")
+                        .classList.add("open");
+                    setTimeout(() => $("secret-input").focus(), 50);
+                    return false;
+                }
+                return true;
+            }
+            async function _post(url, body) {
+                return fetch(url, {
+                    method: "POST",
+                    headers: {
+                        ...authHeader(),
+                        ...(body ? { "Content-Type": "application/json" } : {}),
+                    },
+                    body: body ? JSON.stringify(body) : undefined,
                 });
-            } else {
-                _replay.board.orientation(_replay.color);
             }
-            setTimeout(() => { _replay.board.resize(); renderReplayStep(); }, 0);
-        } else {
-            renderReplayStep();
-        }
-    } catch (e) { console.error(e); }
-}
 
-function renderReplayStep() {
-    const { steps, idx } = _replay;
-    $('r-prev').disabled = idx <= 0;
-    $('r-next').disabled = idx >= steps.length - 1;
-    $('r-pos').textContent = steps.length ? `Move ${idx + 1} / ${steps.length}` : '—';
-    if (!steps.length) return;
-    const step = steps[idx];
-    const prevStep = idx > 0 ? steps[idx - 1] : null;
-
-    if (_replay.board && window.Chess) {
-        try {
-            const chess = _replay.initFen ? new Chess(_replay.initFen) : new Chess();
-            chess.load && _replay.initFen && chess.load(_replay.initFen);
-            const prior = step.moves_before ? step.moves_before.trim().split(/\s+/).filter(Boolean) : [];
-            const uciMove = m => chess.move({ from: m.slice(0,2), to: m.slice(2,4), promotion: m[4] || 'q' });
-            prior.forEach(uciMove);
-            const from = step.move ? step.move.slice(0,2) : null;
-            const to   = step.move ? step.move.slice(2,4) : null;
-            if (step.move) uciMove(step.move);
-            _replay.board.position(chess.fen(), false);
-            jQuery('.square-55d63').css('background', '');
-            if (from && to) {
-                jQuery(`.square-${from}, .square-${to}`)
-                    .css('background', 'rgba(83,74,183,0.42)');
+            async function deployCkpt(name) {
+                if (!_ensureAuth()) return;
+                try {
+                    const r = await _post("/api/deploy", { model: name });
+                    const d = await r.json();
+                    if (!d.ok) alert("Error: " + (d.error || r.status));
+                } catch (e) {
+                    alert("Error: " + e.message);
+                }
+                await refreshAndRender();
             }
-            const oppMove = step.opponent_move || (prevStep ? (() => {
-                const prevMoves = (prevStep.moves_before || '').trim().split(/\s+/).filter(Boolean);
-                const currMoves = (step.moves_before || '').trim().split(/\s+/).filter(Boolean);
-                if (currMoves.length > prevMoves.length) return currMoves[prevMoves.length];
-                return '';
-            })() : '');
-            if (oppMove && oppMove.length >= 4) {
-                jQuery(`.square-${oppMove.slice(0,2)}, .square-${oppMove.slice(2,4)}`)
-                    .css('background', 'rgba(255,197,53,0.42)');
+            async function deleteCkpt(name) {
+                if (!confirm(`Delete checkpoint "${name.replace(/_/g, " ")}"?`))
+                    return;
+                if (!_ensureAuth()) return;
+                try {
+                    const r = await fetch(
+                        `/api/checkpoints/${encodeURIComponent(name)}`,
+                        {
+                            method: "DELETE",
+                            headers: authHeader(),
+                        },
+                    );
+                    const d = await r.json();
+                    if (!d.ok) alert("Error: " + (d.error || r.status));
+                } catch (e) {
+                    alert("Error: " + e.message);
+                }
+                await refreshAndRender();
             }
-        } catch(e) { console.warn('replay render:', e); }
-    }
+            async function deleteDataset(name) {
+                if (!confirm(`Delete dataset "${name}"?`)) return;
+                if (!_ensureAuth()) return;
+                try {
+                    const r = await fetch(
+                        `/api/datasets/${encodeURIComponent(name)}`,
+                        {
+                            method: "DELETE",
+                            headers: authHeader(),
+                        },
+                    );
+                    const d = await r.json();
+                    if (!d.ok) alert("Error: " + (d.error || r.status));
+                } catch (e) {
+                    alert("Error: " + e.message);
+                }
+                await refreshAndRender();
+            }
 
-    const val = step.value ?? 0;
-    const fill = $('r-vfill');
-    if (val >= 0) {
-        fill.style.left = '50%'; fill.style.width = (val * 50) + '%'; fill.style.background = 'var(--green)';
-    } else {
-        fill.style.left = (50 + val * 50) + '%'; fill.style.width = (-val * 50) + '%'; fill.style.background = 'var(--red)';
-    }
-    $('r-vtext').textContent = (val >= 0 ? '+' : '') + Number(val).toFixed(3);
-    $('r-entropy').textContent = Number(step.entropy ?? 0).toFixed(3) + ' nats';
+            async function startTraining() {
+                if (!_ensureAuth()) return;
+                const fb = $("t-fb");
+                fb.textContent = "Starting…";
+                const params = {
+                    dataset: $("t-dataset").value,
+                    base_model: $("t-base").value,
+                    epochs: parseInt($("t-epochs").value),
+                    batch_size: parseInt($("t-batch").value),
+                    lr: $("t-lr").value,
+                    lr_min: $("t-lr-min").value,
+                    weight_decay: parseFloat($("t-wd").value),
+                    value_weight: parseFloat($("t-vw").value),
+                    eval_games: parseInt($("t-eval").value),
+                    trunk_sizes: $("t-trunk").value,
+                    dropout: parseFloat($("t-drop").value),
+                };
+                try {
+                    const r = await _post("/api/train/start", params);
+                    const d = await r.json();
+                    fb.textContent = d.ok
+                        ? `Started — ${d.container_id}`
+                        : "Error: " + d.error;
+                } catch (e) {
+                    fb.textContent = "Error: " + e.message;
+                }
+                setTimeout(refreshAndRender, 1000);
+            }
+            async function stopTraining() {
+                if (!_ensureAuth()) return;
+                const fb = $("t-fb");
+                fb.textContent = "Stopping…";
+                try {
+                    const r = await _post("/api/train/stop");
+                    const d = await r.json();
+                    fb.textContent = d.ok ? "Stopped" : "Error: " + d.error;
+                } catch (e) {
+                    fb.textContent = "Error: " + e.message;
+                }
+                setTimeout(refreshAndRender, 1000);
+            }
 
-    const top5 = step.top5 || [];
-    const played = step.move || '';
-    const bars = $('r-bars');
-    if (!top5.length) { bars.innerHTML = '<span class="muted">No policy data</span>'; return; }
-    const maxP = top5[0].prob || 1;
-    bars.innerHTML = top5.map(({ move, prob }) => {
-        const p = move === played;
-        return `<div class="pol-row">
-            <span class="pol-move${p ? ' played' : ''}">${move}</span>
-            <div class="pol-track"><div class="pol-fill${p ? ' played' : ''}" style="width:${(prob/maxP*100).toFixed(1)}%"></div></div>
-            <span class="pol-prob">${(prob*100).toFixed(1)}%</span>
+            async function restartBot() {
+                if (!_ensureAuth()) return;
+                _bcMsg("Restarting bot…");
+                try {
+                    const r = await _post("/api/bot/restart");
+                    const d = await r.json();
+                    _bcMsg(d.ok ? "Bot restarted." : d.error || "Error", !d.ok);
+                } catch (e) {
+                    _bcMsg(e.message, true);
+                }
+            }
+            async function restartDashboard() {
+                if (!_ensureAuth()) return;
+                _bcMsg("Restarting dashboard…");
+                try {
+                    await _post("/api/dashboard/restart");
+                    _bcMsg("Reloading in 3s…");
+                    setTimeout(() => location.reload(), 3000);
+                } catch (e) {
+                    _bcMsg(e.message, true);
+                }
+            }
+            async function toggleBot() {
+                if (!_ensureAuth()) return;
+                const bs = state.botStatus;
+                const action =
+                    bs && !bs.unreachable && bs.paused ? "resume" : "pause";
+                try {
+                    const r = await _post(`/api/bot/${action}`);
+                    const d = await r.json();
+                    if (!d.ok) _bcMsg(d.error || "Error", true);
+                } catch (e) {
+                    _bcMsg(e.message, true);
+                }
+                await refreshAndRender();
+            }
+
+            async function saveBotConfig() {
+                if (!_ensureAuth()) return;
+                const config = {
+                    max_depth: parseInt($("cfg-depth").value),
+                    rating_low: parseInt($("cfg-rlo").value),
+                    rating_high: parseInt($("cfg-rhi").value),
+                    daily_quota: parseInt($("cfg-quota").value),
+                    min_challenge_gap_seconds: parseInt($("cfg-gap").value),
+                };
+                try {
+                    const r = await _post("/api/bot/config", config);
+                    const d = await r.json();
+                    _bcMsg(
+                        d.unreachable
+                            ? "Bot unreachable"
+                            : d.error
+                              ? `Error: ${d.error}`
+                              : "Saved",
+                        !!(d.unreachable || d.error),
+                    );
+                } catch (e) {
+                    _bcMsg(e.message, true);
+                }
+            }
+            function _bcMsg(msg, isErr) {
+                const el = $("bc-msg");
+                el.textContent = msg;
+                el.style.color = isErr ? "var(--red)" : "var(--text-muted)";
+                if (msg)
+                    setTimeout(() => {
+                        if (el.textContent === msg) el.textContent = "";
+                    }, 4000);
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // Bot logs (lazy)
+            // ═══════════════════════════════════════════════════════════════
+            function _logLevel(line) {
+                if (/\[ ?Error/i.test(line) || /ERROR/.test(line)) return "err";
+                if (/\[ ?Warn/i.test(line) || /WARNING/.test(line))
+                    return "warn";
+                if (/\[ ?Info/i.test(line)) return "info";
+                return "";
+            }
+            async function fetchBotLogs() {
+                clearTimeout(_logTimer);
+                try {
+                    const r = await fetch("/api/bot/logs?n=20");
+                    const d = await r.json();
+                    const pane = $("bot-log");
+                    if (!d.lines || !d.lines.length) {
+                        pane.innerHTML = `<span class="log-empty">${d.running === false ? "Bot not running" : "No logs"}</span>`;
+                    } else {
+                        const clean = (s) =>
+                            s
+                                .replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s*/, "")
+                                .replace(/\x1b\[[0-9;]*m/g, "");
+                        pane.innerHTML = d.lines
+                            .map((l) => {
+                                const t = clean(l);
+                                return `<div class="log-line ${_logLevel(t)}">${escapeHtml(t)}</div>`;
+                            })
+                            .join("");
+                        pane.scrollTop = pane.scrollHeight;
+                    }
+                } catch {}
+                const open = document.querySelector("details.logs")?.open;
+                if (open) _logTimer = setTimeout(fetchBotLogs, 5000);
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // Replay
+            // ═══════════════════════════════════════════════════════════════
+            function closeReplay() {
+                const v = document.getElementById("replay-viewer");
+                if (v) v.style.display = "none";
+                _replay.steps = [];
+                _replay.gameId = null;
+            }
+
+            async function selectReplayGame(gameId) {
+                const v = document.getElementById("replay-viewer");
+                if (v) v.style.display = "";
+                v && v.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                _replay.gameId = gameId;
+                try {
+                    const r = await fetch(`/api/games/${gameId}/trace`);
+                    if (!r.ok) return;
+                    const lines = (await r.text())
+                        .trim()
+                        .split("\n")
+                        .filter((l) => l.trim());
+                    if (!lines.length) return;
+                    const header = JSON.parse(lines[0]);
+                    _replay.initFen = header.initial_fen || null;
+                    _replay.color = header.color || "white";
+                    _replay.steps = lines.slice(1).map((l) => JSON.parse(l));
+                    _replay.idx = 0;
+
+                    const g = state.allGames.find((x) => x.game_id === gameId);
+                    $("r-badge").className = "badge " + (g ? g.result : "draw");
+                    $("r-badge").textContent =
+                        g && g.result ? g.result[0].toUpperCase() : "?";
+                    $("r-title").textContent = `vs ${header.opponent || "?"}`;
+                    $("r-sub").textContent =
+                        `as ${_replay.color} · ${_replay.steps.length} traced moves`;
+                    $("r-link").href = `https://lichess.org/${gameId}`;
+                    $("replay-mid").style.display = "";
+                    $("replay-nn").style.display = "";
+
+                    if (window.Chessboard) {
+                        if (!_replay.board) {
+                            _replay.board = Chessboard("replay-board", {
+                                pieceTheme:
+                                    "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+                                orientation: _replay.color,
+                                position: "start",
+                            });
+                        } else {
+                            _replay.board.orientation(_replay.color);
+                        }
+                        setTimeout(() => {
+                            _replay.board.resize();
+                            renderReplayStep();
+                        }, 0);
+                    } else {
+                        renderReplayStep();
+                    }
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+
+            function renderReplayStep() {
+                const { steps, idx } = _replay;
+                $("r-prev").disabled = idx <= 0;
+                $("r-next").disabled = idx >= steps.length - 1;
+                $("r-pos").textContent = steps.length
+                    ? `Move ${idx + 1} / ${steps.length}`
+                    : "—";
+                if (!steps.length) return;
+                const step = steps[idx];
+                const prevStep = idx > 0 ? steps[idx - 1] : null;
+
+                if (_replay.board && window.Chess) {
+                    try {
+                        const chess = _replay.initFen
+                            ? new Chess(_replay.initFen)
+                            : new Chess();
+                        chess.load &&
+                            _replay.initFen &&
+                            chess.load(_replay.initFen);
+                        const prior = step.moves_before
+                            ? step.moves_before
+                                  .trim()
+                                  .split(/\s+/)
+                                  .filter(Boolean)
+                            : [];
+                        const uciMove = (m) =>
+                            chess.move({
+                                from: m.slice(0, 2),
+                                to: m.slice(2, 4),
+                                promotion: m[4] || "q",
+                            });
+                        prior.forEach(uciMove);
+                        const from = step.move ? step.move.slice(0, 2) : null;
+                        const to = step.move ? step.move.slice(2, 4) : null;
+                        if (step.move) uciMove(step.move);
+                        _replay.board.position(chess.fen(), false);
+                        jQuery(".square-55d63").css("background", "");
+                        if (from && to) {
+                            jQuery(`.square-${from}, .square-${to}`).css(
+                                "background",
+                                "rgba(155,199,0,0.41)",
+                            );
+                        }
+                        let oppMove = "";
+                        if (prevStep) {
+                            const prevMoves = (prevStep.moves_before || "").trim().split(/\s+/).filter(Boolean);
+                            const currMoves = (step.moves_before || "").trim().split(/\s+/).filter(Boolean);
+                            // currMoves[prevMoves.length] = Cassandra's own previous move
+                            // currMoves[prevMoves.length + 1] = opponent's response
+                            if (currMoves.length > prevMoves.length + 1)
+                                oppMove = currMoves[prevMoves.length + 1];
+                        }
+                        if (oppMove && oppMove.length >= 4) {
+                            jQuery(
+                                `.square-${oppMove.slice(0, 2)}, .square-${oppMove.slice(2, 4)}`,
+                            ).css("background", "rgba(155,199,0,0.41)");
+                        }
+                    } catch (e) {
+                        console.warn("replay render:", e);
+                    }
+                }
+
+                const val = step.value ?? 0;
+                const fill = $("r-vfill");
+                if (val >= 0) {
+                    fill.style.left = "50%";
+                    fill.style.width = val * 50 + "%";
+                    fill.style.background = "var(--green)";
+                } else {
+                    fill.style.left = 50 + val * 50 + "%";
+                    fill.style.width = -val * 50 + "%";
+                    fill.style.background = "var(--red)";
+                }
+                $("r-vtext").textContent =
+                    (val >= 0 ? "+" : "") + Number(val).toFixed(3);
+                $("r-entropy").textContent =
+                    Number(step.entropy ?? 0).toFixed(3) + " nats";
+
+                const top5 = step.top5 || [];
+                const played = step.move || "";
+                const bars = $("r-bars");
+                if (!top5.length) {
+                    bars.innerHTML =
+                        '<span class="muted">No policy data</span>';
+                    return;
+                }
+                const maxP = top5[0].prob || 1;
+                bars.innerHTML = top5
+                    .map(({ move, prob }) => {
+                        const p = move === played;
+                        return `<div class="pol-row">
+            <span class="pol-move${p ? " played" : ""}">${move}</span>
+            <div class="pol-track"><div class="pol-fill${p ? " played" : ""}" style="width:${((prob / maxP) * 100).toFixed(1)}%"></div></div>
+            <span class="pol-prob">${(prob * 100).toFixed(1)}%</span>
         </div>`;
-    }).join('');
-}
-function replayPrev() { if (_replay.idx > 0) { _replay.idx--; renderReplayStep(); } }
-function replayNext() { if (_replay.idx < _replay.steps.length - 1) { _replay.idx++; renderReplayStep(); } }
+                    })
+                    .join("");
+            }
+            function replayPrev() {
+                if (_replay.idx > 0) {
+                    _replay.idx--;
+                    renderReplayStep();
+                }
+            }
+            function replayNext() {
+                if (_replay.idx < _replay.steps.length - 1) {
+                    _replay.idx++;
+                    renderReplayStep();
+                }
+            }
 
-document.addEventListener('keydown', e => {
-    if (!_replay.steps.length) return;
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); replayPrev(); }
-    if (e.key === 'ArrowRight') { e.preventDefault(); replayNext(); }
-});
+            document.addEventListener("keydown", (e) => {
+                if (!_replay.steps.length) return;
+                if (e.key === "ArrowLeft") {
+                    e.preventDefault();
+                    replayPrev();
+                }
+                if (e.key === "ArrowRight") {
+                    e.preventDefault();
+                    replayNext();
+                }
+            });
 
-// ═══════════════════════════════════════════════════════════════
-// View switching
-// ═══════════════════════════════════════════════════════════════
-function showView(name) {
-    _currentView = name;
-    document.querySelectorAll('.view').forEach(s => s.classList.toggle('active', s.dataset.view === name));
-    document.querySelectorAll('.nav-link').forEach(a => a.classList.toggle('active', a.dataset.view === name));
-    history.replaceState(null, '', '#' + name);
-    if (name === 'docs') loadDocs();
-}
+            // ═══════════════════════════════════════════════════════════════
+            // View switching
+            // ═══════════════════════════════════════════════════════════════
+            function showView(name) {
+                _currentView = name;
+                document
+                    .querySelectorAll(".view")
+                    .forEach((s) =>
+                        s.classList.toggle("active", s.dataset.view === name),
+                    );
+                document
+                    .querySelectorAll(".nav-link")
+                    .forEach((a) =>
+                        a.classList.toggle("active", a.dataset.view === name),
+                    );
+                history.replaceState(null, "", "#" + name);
+                if (name === "docs") loadDocs();
+            }
 
-let _docsLoaded = false;
-let _showdownConverter = null;
-async function loadDocs() {
-    if (_docsLoaded) return;
-    const el = $('docs-content');
-    try {
-        const md = await getText('/docs/engine.md');
-        if (!md) { el.innerHTML = '<span class="muted">Failed to load documentation.</span>'; return; }
-        if (!_showdownConverter) _showdownConverter = new showdown.Converter({ tables: true, strikethrough: true });
-        el.innerHTML = _showdownConverter.makeHtml(md);
-        _docsLoaded = true;
-    } catch (e) {
-        el.innerHTML = '<span class="muted">Error loading documentation: ' + escapeHtml(e.message) + '</span>';
-    }
-}
-document.querySelectorAll('.nav-link').forEach(a => {
-    a.addEventListener('click', e => { e.preventDefault(); showView(a.dataset.view); });
-});
-window.addEventListener('popstate', () => showView(location.hash.slice(1) || 'bot'));
+            let _docsLoaded = false;
+            let _showdownConverter = null;
+            async function loadDocs() {
+                if (_docsLoaded) return;
+                const el = $("docs-content");
+                try {
+                    const md = await getText("/docs/engine.md");
+                    if (!md) {
+                        el.innerHTML =
+                            '<span class="muted">Failed to load documentation.</span>';
+                        return;
+                    }
+                    if (!_showdownConverter)
+                        _showdownConverter = new showdown.Converter({
+                            tables: true,
+                            strikethrough: true,
+                        });
+                    el.innerHTML = _showdownConverter.makeHtml(md);
+                    _docsLoaded = true;
+                } catch (e) {
+                    el.innerHTML =
+                        '<span class="muted">Error loading documentation: ' +
+                        escapeHtml(e.message) +
+                        "</span>";
+                }
+            }
+            document.querySelectorAll(".nav-link").forEach((a) => {
+                a.addEventListener("click", (e) => {
+                    e.preventDefault();
+                    showView(a.dataset.view);
+                });
+            });
+            window.addEventListener("popstate", () =>
+                showView(location.hash.slice(1) || "bot"),
+            );
 
-document.querySelector('details.logs').addEventListener('toggle', e => {
-    if (e.target.open) fetchBotLogs();
-    else clearTimeout(_logTimer);
-});
+            document
+                .querySelector("details.logs")
+                .addEventListener("toggle", (e) => {
+                    if (e.target.open) fetchBotLogs();
+                    else clearTimeout(_logTimer);
+                });
 
-// ═══════════════════════════════════════════════════════════════
-// Init
-// ═══════════════════════════════════════════════════════════════
-async function refreshAndRender() {
-    await fetchAll();
-    renderAll();
-}
+            // ═══════════════════════════════════════════════════════════════
+            // Init
+            // ═══════════════════════════════════════════════════════════════
+            async function refreshAndRender() {
+                await fetchAll();
+                renderAll();
+            }
 
-(async function init() {
-    await initAuth();
-    showView(location.hash.slice(1) || 'bot');
-    await refreshAndRender();
-    setInterval(refreshAndRender, REFRESH_MS);
-})();
-</script>
-</body>
+            (async function init() {
+                if (localStorage.getItem('cassandra_theme') === 'light')
+                    document.documentElement.classList.add('light');
+                await initAuth();
+                showView(location.hash.slice(1) || "bot");
+                await refreshAndRender();
+                setInterval(refreshAndRender, REFRESH_MS);
+            })();
+        </script>
+    </body>
 </html>

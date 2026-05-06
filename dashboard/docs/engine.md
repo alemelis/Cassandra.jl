@@ -180,19 +180,6 @@ Implementation: `src/Search/AlphaBeta.jl`
 
 ---
 
-### Quiescence Search
-
-Implementation: `src/Search/Quiescence.jl`
-
-- Max depth: `QS_MAX_PLY = 8` (line 1)
-- Uses `leaf_eval(board)` for standing pat score
-- Only searches tactical moves when not in check: `filter(_is_tactical, legal.moves)`
-- Move ordering via `_qs_order!()` using `_capture_score()`
-
-> **⚠️ Status**: The quiescence search references `leaf_eval`, `_capture_score`, and `_is_tactical` which are **not defined** anywhere in the codebase. This feature is **non-functional** and needs implementation.
-
----
-
 ### Move Ordering
 
 Implementation: `src/Search/MoveOrder.jl`
@@ -215,21 +202,6 @@ Implementation: `src/Search/TT.jl`
 - **Constants**: `INF_SCORE = 200,000`, `MATE_SCORE = 100,000`
 - `tt_probe()`: Returns stored score if valid and deep enough
 - `tt_store!()`: Stores new entries, keeps deeper results
-
----
-
-### Killer Moves & History Heuristic
-
-Implementation: `src/Search/Killers.jl`
-
-- `_KILLERS`: Array of killer moves per ply
-- `_HISTORY`: 64×64 history counter
-- `killer_record!()`: Records killer moves
-- `history_bump!()`: Bumps history score by `depth²`
-- `killer_score()`: Returns 9000/8000 for killer moves
-- `history_score()`: Returns history counter value
-
-> **⚠️ Status**: These functions are **defined but never called** in the current search implementation. They need to be integrated into `order_moves!()` or `_negamax()`.
 
 ---
 
@@ -256,79 +228,12 @@ Implementation: `src/Eval/NNEval.jl`
 - Returns value, policy entropy, and top-5 moves with probabilities
 - Uses softmax over legal move logits
 
-### Secondary: Handcrafted Evaluation
-
-Implementation: `src/Eval/HandcraftedEval.jl`
-
-`handcrafted_eval(board)`:
-- Returns `-0.95` if in check
-- Returns `0.0` if only king remains
-- Otherwise calls `material_eval()`
-
-### Material Evaluation
-
-Implementation: `src/Board.jl:3-16`
-
-`material_eval(board)`:
-- Computes piece count difference (pawns=1, knights/bishops=3, rooks=5, queens=9)
-- Normalized to `[-1, 1]` by dividing by 19 (max imbalance = queen + 2 rooks)
-- From perspective of the side to move
-
-> **⚠️ Status**: `HandcraftedEval.jl` is **not included** in the main `Cassandra.jl` module. It was added in commit `1edf29a` but never integrated.
-
----
-
-## Opening Books
-
-### Implementation
-
-Implementation: `src/Book/OpeningBook.jl`
-
-#### Storage
-In-memory `Dict{String, Float32}` where keys are FEN strings and values are Float32 scores.
-
-#### Format
-Custom text-based format (NOT Polyglot, NOT PGN):
-```
-FEN;score
-```
-Example: `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1;0.5`
-
-#### Loading
-`load_opening_book(path)` reads a text file and populates the `_BOOK` dictionary. Silently returns if file doesn't exist.
-
-#### Usage
-`book_score(fen)` returns the score for a position, or `0f0` if not found.
-
-### Current Status
-
-> **⚠️ NOT INTEGRATED** — The opening book module is **not included** in `src/Cassandra.jl` and is never called during gameplay.
->
-> - `load_opening_book()` is never invoked
-> - `book_score()` is never called
-> - `select_move()` in `AlphaBeta.jl:122-126` goes straight to search without consulting the book
-
-To integrate:
-1. Add `include("Book/OpeningBook.jl")` to `src/Cassandra.jl`
-2. Call `load_opening_book(path)` at startup
-3. Probe the book in `select_move()` before falling back to search
-
-### Book Generation
-No code exists for:
-- Parsing PGN files to build a book
-- Generating a book from self-play games
-- Managing or updating the book
-
 ---
 
 ## Known Issues & Todo
 
 | Issue | Location | Status |
 |-------|----------|--------|
-| Quiescence search non-functional | `src/Search/Quiescence.jl` | References undefined functions (`leaf_eval`, `_capture_score`, `_is_tactical`) |
-| Killers/history not integrated | `src/Search/Killers.jl` | Functions defined but never called in search |
-| Opening book not integrated | `src/Book/OpeningBook.jl` | Module not included in main, never called |
-| Handcrafted eval not integrated | `src/Eval/HandcraftedEval.jl` | Module not included in main |
 | No null-move pruning | `src/Search/AlphaBeta.jl` | Not implemented (could help with tactics) |
 | No futility pruning | `src/Search/AlphaBeta.jl` | Not implemented |
 | No razoring | `src/Search/AlphaBeta.jl` | Not implemented |
@@ -341,16 +246,12 @@ No code exists for:
 |-----------|------|-----------|
 | Main module | `src/Cassandra.jl` | Entry point |
 | Negamax Alpha-Beta | `src/Search/AlphaBeta.jl` | 14-74, 76-120 |
-| Quiescence search | `src/Search/Quiescence.jl` | 9-43 |
 | Move ordering | `src/Search/MoveOrder.jl` | 1-27 |
 | Transposition table | `src/Search/TT.jl` | 1-41 |
-| Killers/history | `src/Search/Killers.jl` | 1-38 |
 | NN model | `src/Model/CassandraModel.jl` | 1-112 |
 | Move index (1924) | `src/Model/MoveIndex.jl` | 1-47 |
 | NN evaluation | `src/Eval/NNEval.jl` | 1-35 |
-| Handcrafted eval | `src/Eval/HandcraftedEval.jl` | 1-9 |
 | Material eval | `src/Board.jl` | 3-16 |
-| Opening book | `src/Book/OpeningBook.jl` | 1-16 |
 | Training loop | `src/Training/Trainer.jl` | 19-86 |
 | Puzzle data | `src/Training/Imitation.jl` | 14-77 |
 | Self-play | `src/Training/SelfPlay.jl` | 16-54 |

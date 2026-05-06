@@ -351,11 +351,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif path.startswith('/api/checkpoints'):      self._handle_checkpoints()
         elif path.startswith('/api/datasets'):         self._handle_datasets_get()
         elif path.startswith('/api/train/status'):     self._handle_train_status()
-        elif path == '/api/bot/challenge/status':      self._handle_challenge_status()
-        elif path == '/api/bot/games/status':          self._handle_games_status()
-        elif path == '/api/bot/search/config':         self._handle_search_config_get()
-        elif path.startswith('/api/bot/logs'):         self._handle_bot_logs()
-        elif path.startswith('/api/arenas'):           self._handle_arenas()
+        elif path == '/api/bot/status':                self._handle_bot_status()
+        elif path == '/api/bot/config':               self._handle_bot_config_get()
+        elif path.startswith('/api/bot/logs'):        self._handle_bot_logs()
         elif path == '/api/games':                      self._handle_games_list()
         elif path.startswith('/api/games/') and path.endswith('/trace'):
             gid = path[len('/api/games/'):-len('/trace')]
@@ -404,11 +402,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         elif path == '/api/train/start':       self._handle_train_start()
         elif path == '/api/train/stop':        self._handle_train_stop()
         elif path == '/api/bot/restart':           self._handle_bot_restart()
-        elif path == '/api/bot/challenge/pause':   self._handle_challenge_pause()
-        elif path == '/api/bot/challenge/resume':  self._handle_challenge_resume()
-        elif path == '/api/bot/games/pause':       self._handle_games_pause()
-        elif path == '/api/bot/games/resume':      self._handle_games_resume()
-        elif path == '/api/bot/search/config':     self._handle_search_config_set()
+        elif path == '/api/bot/pause':             self._handle_bot_pause()
+        elif path == '/api/bot/resume':            self._handle_bot_resume()
+        elif path == '/api/bot/config':            self._handle_bot_config_set()
         elif path == '/api/dashboard/restart':     self._handle_dashboard_restart()
         else:
             self.send_error(404)
@@ -461,14 +457,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     # ── Training control ──────────────────────────────────────────────────────
 
-    def _handle_arenas(self):
-        try:
-            req = urllib.request.Request(f'{BOT_CONTROL}/arenas')
-            with urllib.request.urlopen(req, timeout=5) as r:
-                arenas = json.loads(r.read())
-            self._json(200, {'arenas': arenas})
-        except Exception as e:
-            self._json(200, {'arenas': [], 'error': str(e)})
+    def _handle_bot_status(self):
+        self._json(200, self._bot_get('/status', {'unreachable': True}))
+
+    def _handle_bot_config_get(self):
+        self._json(200, self._bot_get('/config', {'unreachable': True}))
 
     def _handle_games_list(self):
         n = 200
@@ -558,54 +551,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         with urllib.request.urlopen(req, timeout=3) as r:
             return json.loads(r.read())
 
-    def _handle_games_status(self):
-        self._json(200, self._bot_get('/games/status', {'paused': False, 'unreachable': True}))
-
-    def _handle_games_pause(self):
+    def _handle_bot_pause(self):
         if not _auth_ok(self.headers):
             self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
         try:
-            self._json(200, self._bot_post('/games/pause'))
+            self._json(200, self._bot_post('/pause'))
         except Exception as e:
             self._json(502, {'ok': False, 'error': str(e)})
 
-    def _handle_games_resume(self):
+    def _handle_bot_resume(self):
         if not _auth_ok(self.headers):
             self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
         try:
-            self._json(200, self._bot_post('/games/resume'))
+            self._json(200, self._bot_post('/resume'))
         except Exception as e:
             self._json(502, {'ok': False, 'error': str(e)})
 
-    def _handle_challenge_status(self):
-        self._json(200, self._bot_get('/challenge/status', {'paused': False, 'unreachable': True}))
-
-    def _handle_challenge_pause(self):
-        if not _auth_ok(self.headers):
-            self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
-        try:
-            self._json(200, self._bot_post('/challenge/pause'))
-        except Exception as e:
-            self._json(502, {'ok': False, 'error': str(e)})
-
-    def _handle_challenge_resume(self):
-        if not _auth_ok(self.headers):
-            self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
-        try:
-            self._json(200, self._bot_post('/challenge/resume'))
-        except Exception as e:
-            self._json(502, {'ok': False, 'error': str(e)})
-
-    def _handle_search_config_get(self):
-        self._json(200, self._bot_get('/search/config', {'max_depth': None, 'unreachable': True}))
-
-    def _handle_search_config_set(self):
+    def _handle_bot_config_set(self):
         if not _auth_ok(self.headers):
             self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
         try:
             length = int(self.headers.get('Content-Length', 0))
             body   = self.rfile.read(length) if length else b'{}'
-            self._json(200, self._bot_post('/search/config', body))
+            self._json(200, self._bot_post('/config', body))
         except Exception as e:
             self._json(502, {'ok': False, 'error': str(e)})
 
