@@ -23,7 +23,6 @@
     "rook_semi_cp": 12
   },
   "ordering": {
-    "use_policy_logits": false,
     "killers": true,
     "history": true
   },

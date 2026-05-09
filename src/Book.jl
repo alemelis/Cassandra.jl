@@ -2,7 +2,7 @@ module Book
 
 using Bobby, JSON3, Random
 
-const _START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+import ..START_FEN
 
 const BOOK_PATH    = Ref{String}(
     get(ENV, "CASSANDRA_BOOK", joinpath(@__DIR__, "..", "book", "book.json")))
@@ -93,7 +93,7 @@ end
 
 function add_line!(name::AbstractString, uci_moves::AbstractString)
     lock(LOCK) do
-        board = Bobby.loadFen(_START_FEN)
+        board = Bobby.loadFen(START_FEN)
         for uci in split(strip(uci_moves))
             m = Bobby.uciMoveToMove(board, String(uci))
             _upsert!(board.hash, String(uci), String(name))

@@ -1,67 +1,63 @@
 # Cassandra — Overview
 
-Cassandra is a chess engine written in Julia. It is built around a small set of
-deliberately-chosen ideas; this wiki explains each of them in enough depth that
-you can understand the implementation, tune it, and know where to look for the
-next gain.
+Cassandra is a classical chess engine written in Julia. It is built around a
+small set of deliberately-chosen ideas; this wiki explains each of them in
+enough depth that you can understand the implementation, tune it, and know
+where to look for the next gain.
 
 ---
 
-## Two engines in one binary
+## What's in the binary
 
-Cassandra carries two evaluators that share the same search:
+Cassandra is a single classical engine: hand-crafted PeSTO evaluation at the
+leaves, alpha-beta search with the standard pruning toolbox, killers/history
+move ordering, transposition table, and an opening book.
 
-| | **Classical** | **Neural** |
+| Component | What it does | Cost / node |
 |---|---|---|
-| Leaf score   | PeSTO PSQT + tapered material + structural bonuses | (planned) value head of `CassandraModel` |
-| Move ordering hint | MVV-LVA + killers + history | Policy logits of the same model |
-| Cost / node  | ~hundreds of ns | ~ms (forward pass dominates) |
-| Tunable from dashboard | yes (Eval section) | yes (Setups → `ordering.use_policy_logits`) |
+| Leaf score (`classical_eval`) | PeSTO PSQT + tapered material + structural bonuses | hundreds of ns |
+| Move ordering (`order_moves!`) | TT move → MVV-LVA → promotions → killers → history | tens of ns |
+| Transposition table | Single-bucket, depth-preferring, mate-distance corrected | tens of ns |
+| Search | Iterative deepening + α/β + qsearch + null-move + LMR + aspiration | the wrapper |
+| Book | Zobrist-keyed weighted move table, hot-reloaded from JSON | one hash lookup |
 
-The classical eval is the primary leaf score today; the network is currently used
-**only for move ordering** when `ordering.use_policy_logits` is true, and as the
-basis for future NNUE-style leaf scoring.
+Every term has a knob in `EngineConfig` and a row in
+`ENGINE_CONFIG_SCHEMA`. The dashboard editor is auto-generated from the
+schema — adding a tunable means adding a struct field plus a schema row.
 
 ---
 
 ## Pipeline at a glance
 
 ```
-  ┌─────────────┐   ┌─────────────────────┐   ┌────────────────┐
-  │ Lichess PGN │──▶│ prepare_pgn /       │──▶│ binary dataset │
-  │ Puzzles CSV │   │ prepare_puzzles     │   │ (records.bin)  │
-  └─────────────┘   └─────────────────────┘   └────────┬───────┘
-                                                       │
-                                                       ▼
-                                          ┌────────────────────────┐
-                                          │ train_epoch! (Flux)    │
-                                          │ value MSE + policy CE  │
-                                          └────────┬───────────────┘
-                                                   │
-                                                   ▼
-                                            checkpoints/*.jld2
-                                                   │
-                       ┌───────────────────────────┴───────────────┐
-                       ▼                                           ▼
-              ┌──────────────────┐                       ┌──────────────────┐
-              │ scripts/deploy   │                       │ Arena vs Stockfish│
-              └────────┬─────────┘                       └──────────────────┘
-                       ▼
-              setups/deployed.json + checkpoints/deployed.jld2
-                       │
-                       ▼
-              ┌──────────────────┐
-              │ bot/main.jl      │── Lichess game stream
-              │ select_move:     │
-              │   Book → Search  │
-              │     ↳ classical_ │
-              │       eval       │
-              └──────────────────┘
+                                        ┌────────────────────────┐
+                                        │ setups/*.json          │
+                                        │ (named EngineConfigs)  │
+                                        └────────────┬───────────┘
+                                                     │ deploy
+                                                     ▼
+                                        ┌────────────────────────┐
+                                        │ setups/deployed.json   │ ← single
+                                        │ (active EngineConfig)  │   source
+                                        └────────────┬───────────┘   of truth
+                                                     │
+              ┌──────────────────────────┬───────────┴──────────┐
+              ▼                          ▼                      ▼
+       ┌────────────────┐         ┌────────────────┐    ┌────────────────┐
+       │ bot/main.jl    │         │ bot/uci.jl     │    │ arena/match.py │
+       │ Lichess stream │         │ stdin/stdout   │    │ vs Stockfish   │
+       └────────────────┘         └────────────────┘    └────────────────┘
+              │                          │                      │
+              └──────────────┬───────────┴──────────┬───────────┘
+                             ▼                      ▼
+                    Cassandra.select_move(board)   logs/*.jsonl
+                       Book → search →
+                         classical_eval
 ```
 
 Every component is exposed in the dashboard:
 
-- **Bot** tab — live game state, recent results, deployed model and setup
+- **Bot** tab — live game state, recent results, deployed setup
 - **Arena** tab — local matches vs Stockfish at fixed strength (Docker)
 - **Setups** tab — edit and deploy `EngineConfig` (search/eval/ordering/book)
 - **Book** tab — opening book entries (FEN hash → weighted UCI moves)
@@ -71,17 +67,17 @@ Every component is exposed in the dashboard:
 
 ## What "playing strength" comes from
 
-For a classical engine, strength ≈ **`eval quality × log(nodes searched)`**. Of
-the two factors, search depth dominates: doubling nodes/sec is worth roughly
-+50 Elo; large eval improvements are worth +10–80 Elo. That's why the wiki
-spends most of its pages on search and move ordering — they are the tightest
-levers.
+For a classical engine, strength ≈ **`eval quality × log(nodes searched)`**.
+Of the two factors, search depth dominates: doubling nodes/sec is worth
+roughly +50 Elo; large eval improvements are worth +10–80 Elo. That's why
+the wiki spends most of its pages on search and move ordering — they are
+the tightest levers.
 
-The 2500-Elo target is reachable with the existing algorithm set (negamax +
-α/β + qsearch + null-move + LMR + TT + iterative deepening), but only if
-Cassandra can sustain ~1 M nodes/sec through the bot's time control. Today the
-binding constraint is Bobby's move generator — see the **Bobby bottlenecks**
-note in the project README for the speedup roadmap.
+The 2500-Elo target is reachable with the existing algorithm set (negamax
++ α/β + qsearch + null-move + LMR + TT + iterative deepening), but only if
+Cassandra can sustain ~1 M nodes/sec through the bot's time control. Today
+the binding constraint is Bobby's move generator — see the **Bobby
+bottlenecks** note in the project README for the speedup roadmap.
 
 ---
 
@@ -109,7 +105,6 @@ note in the project README for the speedup roadmap.
 3. [Evaluation](eval.md) — what the leaves return.
 4. [Transposition table](transposition-table.md) — cache and replacement.
 5. [Opening book](book.md) — the lookup that runs before any search.
-6. [Model](model.md) and [Training](training.md) — the neural side.
-7. [Setups](setups.md) — packaging knobs into deployable configs.
-8. [Bot](bot.md) and [Dashboard](dashboard.md) — operations.
-9. [Roadmap](roadmap.md) — what's next, and why.
+6. [Setups](setups.md) — packaging knobs into deployable configs.
+7. [Bot](bot.md) and [Dashboard](dashboard.md) — operations.
+8. [Roadmap](roadmap.md) — what's next, and why.

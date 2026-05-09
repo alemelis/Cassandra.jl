@@ -2,7 +2,7 @@
 
 `bot/main.jl` runs Cassandra on Lichess. It manages: matchmaking,
 challenge handling, the per-game move loop, daily quota, lockouts, a small
-HTTP control server, and hot-reloading of the deployed setup and model.
+HTTP control server, and hot-reloading of the deployed setup.
 
 The core invariants:
 
@@ -10,9 +10,9 @@ The core invariants:
   in-flight game keeps the search budget predictable.
 - **Self-paced challenges.** The bot doesn't blast challenges; it spaces
   them so it lands close to `daily_quota` games per day.
-- **Hot reload.** Every move checks for a pending setup/model swap; the
-  dashboard's Deploy button takes effect on the bot's next move with no
-  restart.
+- **Hot reload.** `/reload` re-reads `setups/deployed.json` and applies it
+  immediately; the dashboard's Deploy button takes effect on the bot's next
+  move with no restart (mid-game reloads resign the current game first).
 
 ---
 
@@ -22,7 +22,7 @@ The core invariants:
 function handle_position(client, game_id, fen, moves_str, my_color)
     board = Cassandra.apply_moves(moves_str, fen)
     is_my_turn || return
-    move = Cassandra.select_move(current_model(), board)
+    move = Cassandra.select_move(board)
     BongCloud.make_move(client, game_id, move)
 end
 ```
@@ -30,16 +30,15 @@ end
 `select_move`:
 
 1. If `book.enabled` and the position is in the book → return the book move.
-2. Otherwise → `search(model, board; cfg=get_engine_cfg())`.
+2. Otherwise → `search(board; cfg=get_engine_cfg())`.
 
 The deployed setup's `time_limit_s` bounds search time. There is **no
 pondering** (search during the opponent's clock) — added complexity for
 limited gain at our current strength.
 
 Game traces (one JSON line per move) are written to
-`logs/game_traces/<game_id>.jsonl`: ply, FEN-before, move, opponent's reply,
-and (if the model is loaded) value/entropy/top-5 policy moves. The
-dashboard's game replay reads these.
+`logs/game_traces/<game_id>.jsonl`: ply, FEN-before, move, and the
+opponent's reply. The dashboard's game replay reads these.
 
 ---
 
@@ -98,17 +97,12 @@ Cassandra.apply_engine_cfg!(cfg)
 SETUP_META[] = {name, hash}
 ```
 
-The setup file is the **single source of truth** at runtime. Changing
-`max_depth` via the legacy `/config` endpoint also writes back into the
-in-memory engine config (compatibility shim in `Config.jl`).
-
-The model is reloaded only when `ordering.use_policy_logits = true`; if
-disabled, the bot saves the JLD2 load entirely.
+The setup file is the **single source of truth** at runtime.
 
 If a `/reload` arrives mid-game, the current game is **resigned** (the
 configuration may now be invalid for the in-flight position; cleaner to
 forfeit than to play half a game with one config and half with another).
-After the resign, model + setup are reloaded for the next game.
+After the resign, the setup is reloaded for the next game.
 
 ---
 
@@ -122,7 +116,7 @@ Listens on `BOT_CONTROL_PORT` (default 8080). Endpoints:
 | GET  | `/config` | Read-only TC + matchmaking config |
 | POST | `/config` | Patch TC + matchmaking config |
 | POST | `/pause`, `/resume` | Quick pause/resume |
-| POST | `/reload` | Reload setup + model (resigns current game) |
+| POST | `/reload` | Reload deployed setup (resigns current game) |
 | GET  | `/health` | Liveness probe |
 | GET  | `/engine_config` | Current `EngineConfig` as JSON |
 | GET  | `/engine_config/schema` | The schema (for the editor UI) |

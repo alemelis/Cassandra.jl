@@ -27,9 +27,8 @@ Base.@kwdef mutable struct EvalConfig
 end
 
 Base.@kwdef mutable struct OrderingConfig
-    use_policy_logits::Bool = false
-    killers::Bool           = true
-    history::Bool           = true
+    killers::Bool = true
+    history::Bool = true
 end
 
 Base.@kwdef mutable struct BookConfig
@@ -40,12 +39,11 @@ end
 Base.@kwdef mutable struct EngineConfig
     name::String       = "default"
     created_at::String = ""
-    checkpoint::String = ""
 
-    search::SearchConfig   = SearchConfig()
-    eval::EvalConfig       = EvalConfig()
+    search::SearchConfig     = SearchConfig()
+    eval::EvalConfig         = EvalConfig()
     ordering::OrderingConfig = OrderingConfig()
-    book::BookConfig       = BookConfig()
+    book::BookConfig         = BookConfig()
 end
 
 # JSON schema for dashboard editor (field → description + constraints)
@@ -68,6 +66,7 @@ const ENGINE_CONFIG_SCHEMA = Dict{String,Any}(
     "eval.rook_open_cp"            => Dict("type"=>"int",   "min"=>0,  "max"=>80,   "step"=>5,   "description"=>"Bonus for rook on fully open file (no pawns of either side).", "doc"=>"eval.md#rook-open-file"),
     "eval.rook_semi_cp"            => Dict("type"=>"int",   "min"=>0,  "max"=>50,   "step"=>5,   "description"=>"Bonus for rook on semi-open file (no own pawns).", "doc"=>"eval.md#rook-open-file"),
     "ordering.killers"             => Dict("type"=>"bool",  "description"=>"Use killer move heuristic: prefer quiet moves that caused beta-cutoffs at the same depth.", "doc"=>"search.md#move-ordering"),
+
     "ordering.history"             => Dict("type"=>"bool",  "description"=>"Use history heuristic: prefer quiet moves with good historical cutoff record.", "doc"=>"search.md#move-ordering"),
     "book.enabled"                 => Dict("type"=>"bool",  "description"=>"Enable opening book lookups.", "doc"=>"search.md#opening-book"),
     "book.max_ply"                 => Dict("type"=>"int",   "min"=>0,  "max"=>40,   "step"=>2,   "description"=>"Maximum ply at which to consult the book.", "doc"=>"search.md#opening-book"),
@@ -92,7 +91,6 @@ function engine_cfg_to_dict(cfg::EngineConfig)::Dict{String,Any}
     Dict{String,Any}(
         "name"       => cfg.name,
         "created_at" => cfg.created_at,
-        "checkpoint" => cfg.checkpoint,
         "search" => Dict{String,Any}(
             "max_depth"              => s.max_depth,
             "time_limit_s"           => s.time_limit_s,
@@ -115,9 +113,8 @@ function engine_cfg_to_dict(cfg::EngineConfig)::Dict{String,Any}
             "rook_semi_cp"   => e.rook_semi_cp,
         ),
         "ordering" => Dict{String,Any}(
-            "use_policy_logits" => o.use_policy_logits,
-            "killers"           => o.killers,
-            "history"           => o.history,
+            "killers" => o.killers,
+            "history" => o.history,
         ),
         "book" => Dict{String,Any}(
             "enabled" => b.enabled,
@@ -136,7 +133,6 @@ function engine_cfg_from_dict(d::Dict)::EngineConfig
     EngineConfig(
         name       = _s(get(d, "name",       nothing), "default"),
         created_at = _s(get(d, "created_at", nothing), ""),
-        checkpoint = _s(get(d, "checkpoint", nothing), ""),
         search = SearchConfig(
             max_depth               = get(s, "max_depth",               12),
             time_limit_s            = get(s, "time_limit_s",            3.0),
@@ -159,9 +155,8 @@ function engine_cfg_from_dict(d::Dict)::EngineConfig
             rook_semi_cp   = get(e, "rook_semi_cp",   12),
         ),
         ordering = OrderingConfig(
-            use_policy_logits = get(o, "use_policy_logits", false),
-            killers           = get(o, "killers",           true),
-            history           = get(o, "history",           true),
+            killers = get(o, "killers", true),
+            history = get(o, "history", true),
         ),
         book = BookConfig(
             enabled = get(b, "enabled", true),

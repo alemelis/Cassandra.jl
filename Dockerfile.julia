@@ -2,23 +2,22 @@ FROM julia:1.12
 
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-# Bobby.jl lives at ../Bobby.jl relative to the project; mirror that in the image
+# Bobby.jl lives at ../Bobby.jl relative to the project; mirror that in the image.
 COPY Bobby.jl/ /Bobby.jl/
 
 WORKDIR /app
 
-# Copy manifests first for layer-cached package install
+# Manifests first for layer-cached package install.
 COPY Cassandra.jl/Project.toml Cassandra.jl/Manifest.toml ./
 
-# Install packages. Pkg.develop rewrites Manifest.toml in-place so Bobby
-# resolves to /Bobby.jl — this file must NOT be overwritten by a later COPY.
+# Pkg.develop rewrites Manifest.toml in place so Bobby resolves to /Bobby.jl —
+# this file must NOT be overwritten by a later COPY.
 RUN julia -e 'using Pkg; Pkg.activate("/app"); Pkg.develop(PackageSpec(path="/Bobby.jl")); Pkg.instantiate()'
 
-# Copy source and precompile
+# Source + precompile
 COPY Cassandra.jl/src/ src/
 RUN julia --project=. -e 'using Cassandra'
 
-# Copy runtime files (deliberately excludes Project.toml/Manifest.toml)
+# Runtime files (excludes Project.toml/Manifest.toml on purpose).
 COPY Cassandra.jl/bot/ bot/
-COPY Cassandra.jl/scripts/ scripts/
 COPY Cassandra.jl/book/ book/

@@ -11,23 +11,20 @@ using Random
 const BOT_TOKEN = get(ENV, "LICHESS_TOKEN", "")
 isempty(BOT_TOKEN) && error("Set LICHESS_TOKEN environment variable")
 
-const CHECKPOINTS_DIR = get(ENV, "CHECKPOINTS_DIR", joinpath(@__DIR__, "..", "checkpoints"))
-const LOGS_DIR        = get(ENV, "LOGS_DIR",        joinpath(@__DIR__, "..", "logs"))
-const SETUPS_DIR      = get(ENV, "SETUPS_DIR",      joinpath(@__DIR__, "..", "setups"))
-const TRACES_DIR      = joinpath(LOGS_DIR, "game_traces")
-const CONTROL_PORT    = parse(Int, get(ENV, "BOT_CONTROL_PORT", "8080"))
-const CONFIG_PATH     = joinpath(LOGS_DIR, "bot_config.json")
-const QUOTA_PATH      = joinpath(LOGS_DIR, "bot_quota.json")
-const BOT_LOG_PATH    = joinpath(LOGS_DIR, "bot_log.jsonl")
+const LOGS_DIR     = get(ENV, "LOGS_DIR",   joinpath(@__DIR__, "..", "logs"))
+const SETUPS_DIR   = get(ENV, "SETUPS_DIR", joinpath(@__DIR__, "..", "setups"))
+const TRACES_DIR   = joinpath(LOGS_DIR, "game_traces")
+const CONTROL_PORT = parse(Int, get(ENV, "BOT_CONTROL_PORT", "8080"))
+const CONFIG_PATH  = joinpath(LOGS_DIR, "bot_config.json")
+const QUOTA_PATH   = joinpath(LOGS_DIR, "bot_quota.json")
+const BOT_LOG_PATH = joinpath(LOGS_DIR, "bot_log.jsonl")
 
 mkpath(LOGS_DIR); mkpath(TRACES_DIR); mkpath(SETUPS_DIR)
 
-# ── Runtime config ────────────────────────────────────────────────────────────
+# ── Matchmaker config ────────────────────────────────────────────────────────
+# Engine knobs (depth, eval, search, book) live in setups/deployed.json.
+# This file holds only matchmaker preferences.
 
-# Master list of supported time controls (ultra-bullet → rapid).
-# Dashboard checkboxes pick from this list; the bot challenges only with enabled ones.
-# Labels follow chess convention: "<minutes>+<inc>", with "Xs+Y" for sub-minute clocks.
-# The tuple is (clock.limit seconds, clock.increment seconds) sent to Lichess.
 const TC_OPTIONS = [
     ("15s+0", (15,   0)),  # ultra-bullet
     ("30s+0", (30,   0)),  # ultra-bullet
@@ -48,30 +45,21 @@ const TC_BY_LABEL = Dict(t[1] => t[2] for t in TC_OPTIONS)
 const CONFIG_LOCK = ReentrantLock()
 const CONFIG = Ref(Dict{String,Any}(
     "paused"                    => false,
-    "max_depth"                 => 3,
     "rating_low"                => -400,
     "rating_high"               => 1000,
     "daily_quota"               => 100,
     "min_challenge_gap_seconds" => 60,
-    # Default: all TCs enabled. Dashboard writes a subset.
     "enabled_tcs"               => copy(TC_LABELS),
 ))
 
-# Pick a random enabled TC. Falls back to the full list if config is empty/invalid.
 function next_tc()
     raw = lock(CONFIG_LOCK) do; get(CONFIG[], "enabled_tcs", TC_LABELS); end
-    labels = String[]
-    for x in raw
-        s = String(x)
-        haskey(TC_BY_LABEL, s) && push!(labels, s)
-    end
+    labels = String[String(x) for x in raw if haskey(TC_BY_LABEL, String(x))]
     isempty(labels) && (labels = TC_LABELS)
     TC_BY_LABEL[rand(labels)]
 end
 
-# Comma-separated list of currently enabled TC labels (for status display).
-function enabled_tc_summary()
-    raw = lock(CONFIG_LOCK) do; get(CONFIG[], "enabled_tcs", TC_LABELS); end
+enabled_tc_summary() = let raw = lock(CONFIG_LOCK) do; get(CONFIG[], "enabled_tcs", TC_LABELS); end
     labels = String[String(x) for x in raw if haskey(TC_BY_LABEL, String(x))]
     isempty(labels) ? "all" : join(labels, ",")
 end
@@ -80,7 +68,6 @@ function load_config!()
     isfile(CONFIG_PATH) || return
     lock(CONFIG_LOCK) do
         merge!(CONFIG[], JSON3.read(read(CONFIG_PATH, String), Dict{String,Any}))
-        Cassandra.set_max_depth!(Int(CONFIG[]["max_depth"]))
     end
 end
 
@@ -95,38 +82,31 @@ cfg(k) = lock(CONFIG_LOCK) do; CONFIG[][k]; end
 function patch_config!(updates::Dict)
     lock(CONFIG_LOCK) do
         merge!(CONFIG[], updates)
-        haskey(updates, "max_depth") && Cassandra.set_max_depth!(Int(updates["max_depth"]))
     end
     save_config()
 end
 
-# ── Engine setup ──────────────────────────────────────────────────────────────
+# ── Engine setup (single source of truth: setups/deployed.json) ─────────────
 
 const SETUP_LOCK = ReentrantLock()
 const SETUP_META = Ref{Dict{String,Any}}(Dict{String,Any}())
 
-function _deployed_setup_path()
-    joinpath(SETUPS_DIR, "deployed.json")
-end
+_deployed_setup_path() = joinpath(SETUPS_DIR, "deployed.json")
 
 function load_engine_setup!()
     path = _deployed_setup_path()
     if isfile(path)
-        cfg = Cassandra.load_engine_cfg(path)
-        Cassandra.apply_engine_cfg!(cfg)
+        c = Cassandra.load_engine_cfg(path)
+        Cassandra.apply_engine_cfg!(c)
         lock(SETUP_LOCK) do
-            SETUP_META[] = Dict{String,Any}(
-                "name" => cfg.name,
-                "hash" => Cassandra.cfg_hash(cfg),
-            )
+            SETUP_META[] = Dict{String,Any}("name" => c.name, "hash" => Cassandra.cfg_hash(c))
         end
-        @info "[setup] Loaded" name=cfg.name
+        @info "[setup] Loaded" name=c.name
     else
-        # Bootstrap default setup file so dashboard can discover it
-        cfg = Cassandra.get_engine_cfg()
-        Cassandra.save_engine_cfg(cfg, path)
+        c = Cassandra.get_engine_cfg()
+        Cassandra.save_engine_cfg(c, path)
         lock(SETUP_LOCK) do
-            SETUP_META[] = Dict{String,Any}("name" => cfg.name, "hash" => Cassandra.cfg_hash(cfg))
+            SETUP_META[] = Dict{String,Any}("name" => c.name, "hash" => Cassandra.cfg_hash(c))
         end
         @info "[setup] No deployed.json — using defaults, wrote $path"
     end
@@ -178,10 +158,6 @@ const LOCKOUT_UNTIL = Ref{Union{DateTime,Nothing}}(nothing)
 const SKIPLIST      = Dict{String,DateTime}()
 const SKIPLIST_LOCK = ReentrantLock()
 
-const MODEL_LOCK     = ReentrantLock()
-const MODEL_REF      = Ref{Any}(nothing)
-const RELOAD_PENDING = Ref(false)
-
 const PREV_MOVES = Dict{String,String}()
 
 # ── Lockout ───────────────────────────────────────────────────────────────────
@@ -203,83 +179,15 @@ end
 
 # ── Skiplist (24h per-bot cooldown after decline/error) ───────────────────────
 
-function skip!(target::String)
-    lock(SKIPLIST_LOCK) do; SKIPLIST[target] = now() + Hour(24); end
+skip!(target::String) = lock(SKIPLIST_LOCK) do
+    SKIPLIST[target] = now() + Hour(24)
 end
 
-function skipped(target::String)
-    lock(SKIPLIST_LOCK) do
-        t = get(SKIPLIST, target, nothing)
-        t === nothing && return false
-        now() >= t ? (delete!(SKIPLIST, target); false) : true
-    end
+skipped(target::String) = lock(SKIPLIST_LOCK) do
+    t = get(SKIPLIST, target, nothing)
+    t === nothing && return false
+    now() >= t ? (delete!(SKIPLIST, target); false) : true
 end
-
-# ── Model ─────────────────────────────────────────────────────────────────────
-
-const LOADED_META = Ref{Dict{String,Any}}(Dict{String,Any}())
-
-function _needs_model()
-    cfg = Cassandra.get_engine_cfg()
-    cfg.ordering.use_policy_logits
-end
-
-function _load_model()
-    if !_needs_model()
-        @info "[model] use_policy_logits=false — skipping checkpoint load"
-        LOADED_META[] = Dict{String,Any}()
-        return nothing
-    end
-    ckpt = Cassandra.get_engine_cfg().checkpoint
-    path = isempty(ckpt) ? joinpath(CHECKPOINTS_DIR, "deployed.jld2") :
-                           joinpath(CHECKPOINTS_DIR, "$ckpt.jld2")
-    if !isfile(path)
-        @warn "[model] Checkpoint not found: $path — running without NN"
-        LOADED_META[] = Dict{String,Any}()
-        return nothing
-    end
-    @info "[model] Loading $path"
-    model, meta = Cassandra.load_model(path)
-    LOADED_META[] = meta
-    @info "[model] Loaded $(get(meta, "run_name", ckpt))"
-    model
-end
-
-current_model() = lock(MODEL_LOCK) do; MODEL_REF[]; end
-
-function reload_model!()
-    load_engine_setup!()
-    m = _load_model()
-    lock(MODEL_LOCK) do; MODEL_REF[] = m; RELOAD_PENDING[] = false; end
-    @info "Model reloaded"
-end
-
-swap_model_if_pending!() = RELOAD_PENDING[] && reload_model!()
-
-function _deployed_meta()
-    m = LOADED_META[]
-    !isempty(m) && return m
-    # Fall back to legacy sidecar file written by old deploy scripts.
-    p = joinpath(LOGS_DIR, "deployed.json")
-    isfile(p) || return nothing
-    try JSON3.read(read(p, String), Dict{String,Any}) catch; nothing end
-end
-
-function _game_intro()
-    meta = _deployed_meta()
-    meta === nothing && return nothing
-    name = get(meta, :run_name, nothing)
-    name === nothing && return nothing
-    nick   = replace(string(name), "_" => " ")
-    ep     = get(meta, :epoch, nothing)
-    loss   = get(meta, :loss_policy, nothing)
-    detail = ep !== nothing && loss !== nothing ?
-        "epoch $ep, loss $(round(Float64(loss); digits=4))" :
-        ep !== nothing ? "epoch $ep" : nothing
-    detail === nothing ? "$nick · gl hf!" : "$nick · $detail · gl hf!"
-end
-
-MODEL_REF[] = _load_model()
 
 # ── Pacing (self-pace to land ≈daily_quota games/day) ────────────────────────
 
@@ -310,8 +218,7 @@ function pick_target(client)
     catch e; @warn "get_online_bots failed" exception=e; return nothing; end
 
     my_name = OWN_NAME[]
-    lo      = Int(cfg("rating_low"))
-    hi      = Int(cfg("rating_high"))
+    lo, hi  = Int(cfg("rating_low")), Int(cfg("rating_high"))
     my_r    = OWN_RATING[]
 
     candidates = filter(bots) do b
@@ -332,19 +239,20 @@ end
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 function log_game(game_id, result, color, opponent, opponent_rating, tc)
-    meta  = _deployed_meta()
     setup = current_setup_meta()
     rec   = Dict{String,Any}(
-        "ts" => Dates.format(now(), "yyyy-mm-ddTHH:MM:SS"),
-        "game_id" => game_id, "result" => result, "color" => color,
-        "opponent" => opponent, "opponent_rating" => opponent_rating,
+        "ts"              => Dates.format(now(), "yyyy-mm-ddTHH:MM:SS"),
+        "game_id"         => game_id,
+        "result"          => result,
+        "color"           => color,
+        "opponent"        => opponent,
+        "opponent_rating" => opponent_rating,
     )
-    ep = meta !== nothing ? get(meta, :epoch,    nothing) : nothing
-    mn = meta !== nothing ? get(meta, :run_name, nothing) : nothing
-    ep !== nothing && (rec["deployed_epoch"] = ep)
-    mn !== nothing && (rec["model"] = string(mn))
     tc !== nothing && (rec["clock_limit"] = tc[1]; rec["clock_increment"] = tc[2])
-    !isempty(setup) && (rec["setup_name"] = get(setup, "name", ""); rec["setup_hash"] = get(setup, "hash", ""))
+    if !isempty(setup)
+        rec["setup_name"] = get(setup, "name", "")
+        rec["setup_hash"] = get(setup, "hash", "")
+    end
     open(BOT_LOG_PATH, "a") do io; JSON3.write(io, rec); println(io); end
 end
 
@@ -355,8 +263,7 @@ function handle_position(client, game_id, fen, moves_str, my_color)
     is_my_turn = (board.active && my_color == :white) || (!board.active && my_color == :black)
     is_my_turn || return
 
-    model = current_model()
-    move  = Cassandra.select_move(model, board)
+    move = Cassandra.select_move(board)
     if isnothing(move)
         @info "[$game_id] No legal moves — resigning"
         BongCloud.resign_game(client, game_id)
@@ -371,15 +278,9 @@ function handle_position(client, game_id, fen, moves_str, my_color)
             pw, cw = split(strip(prev)), split(strip(moves_str))
             length(cw) > length(pw) && (opp_move = cw[length(pw)+1])
         end
-        # Store moves_str + Cassandra's move so next call can diff to find opponent's response
         PREV_MOVES[game_id] = isempty(moves_str) ? string(move) : moves_str * " " * string(move)
         trace_entry = (ply=n, moves_before=moves_str, move=move,
-            opponent_move=isempty(opp_move) ? nothing : opp_move)
-        if model !== nothing
-            v, ent, top5 = Cassandra.policy_info(model, board)
-            trace_entry = merge(trace_entry, (value=round(v; digits=4),
-                entropy=round(ent; digits=4), top5=top5))
-        end
+                       opponent_move=isempty(opp_move) ? nothing : opp_move)
         open(joinpath(TRACES_DIR, "$game_id.jsonl"), "a") do io
             JSON3.write(io, trace_entry); println(io)
         end
@@ -417,8 +318,7 @@ function play_game(client, game_id)
                 CURRENT_OPPONENT[] = opponent_name[]
 
                 clk = something(event.clock, Dict{String,Any}())
-                lim = get(clk, "initial", 0); inc = get(clk, "increment", 0)
-                # Lichess stream_game returns clock in milliseconds; store as seconds
+                lim, inc = get(clk, "initial", 0), get(clk, "increment", 0)
                 Int(lim) > 0 && (game_tc[] = (div(Int(lim), 1000), div(Int(inc), 1000)))
 
                 @info "[$game_id] Playing as $(my_color[]) vs $(opponent_name[])"
@@ -430,10 +330,6 @@ function play_game(client, game_id)
                         println(io)
                     end
                 catch e; @warn "[$game_id] Trace header failed" exception=e; end
-
-                intro = _game_intro()
-                intro !== nothing &&
-                    try BongCloud.send_chat(client, game_id, "player", intro) catch; end
 
                 state_dict = something(event.state, Dict{String,Any}())
                 handle_position(client, game_id, initial_fen[],
@@ -463,7 +359,6 @@ function play_game(client, game_id)
         CURRENT_GAME_ID[]  = nothing
         CURRENT_OPPONENT[] = ""
         delete!(PREV_MOVES, game_id)
-        swap_model_if_pending!()
         try
             p = BongCloud.get_profile(CLIENT_REF[])
             OWN_RATING[] = _perf_rating(p)
@@ -475,16 +370,16 @@ end
 
 function handle_event(client, event)
     if event.type == "gameStart"
-        game    = event.game; game === nothing && return
+        game = event.game; game === nothing && return
         game_id = string(something(game.gameId, game.id, ""))
         isempty(game_id) && return
         if IN_GAME[]
             @warn "gameStart $game_id but already in a game — ignoring"
             return
         end
-        PENDING_ID[]       = nothing
-        IN_GAME[]          = true
-        CURRENT_GAME_ID[]  = game_id
+        PENDING_ID[]      = nothing
+        IN_GAME[]         = true
+        CURRENT_GAME_ID[] = game_id
         increment_quota!()
         @async play_game(client, game_id)
 
@@ -496,7 +391,6 @@ function handle_event(client, event)
         id         = ch.id
         challenger = string(get(something(ch.challenger, Dict()), "name",
                                 get(something(ch.challenger, Dict()), :name, "?")))
-        # Ignore if Lichess echoed our own outgoing challenge with missing direction
         lowercase(challenger) == lowercase(OWN_NAME[]) && return
         variant    = string(get(something(ch.variant, Dict()), "key",
                                 get(something(ch.variant, Dict()), :key, "standard")))
@@ -549,11 +443,10 @@ function matchmaker_loop(client)
         target === nothing && (@warn "No eligible targets"; sleep(30); continue)
 
         lim, inc = next_tc()
-        rated = true
 
         cid = try
             resp = BongCloud.create_challenge(client, target;
-                rated=rated, clock_limit=lim, clock_increment=inc, color="random")
+                rated=true, clock_limit=lim, clock_increment=inc, color="random")
             id = get(resp, "id", get(resp, :id, nothing))
             id !== nothing ? string(id) : nothing
         catch e
@@ -589,7 +482,6 @@ function start_control_server()
     router = HTTP.Router()
 
     HTTP.register!(router, "GET", "/status", function(req)
-        meta = _deployed_meta()
         body = JSON3.write((
             paused          = Bool(cfg("paused")),
             in_game         = IN_GAME[],
@@ -598,7 +490,7 @@ function start_control_server()
             games_today     = quota_count(),
             daily_quota     = Int(cfg("daily_quota")),
             lockout_seconds = lockout_remaining(),
-            model           = meta !== nothing ? get(meta, :run_name, nothing) : nothing,
+            setup           = get(current_setup_meta(), "name", ""),
             max_depth       = Cassandra.get_max_depth(),
             rating          = OWN_RATING[],
             enabled_tcs     = enabled_tc_summary(),
@@ -622,42 +514,32 @@ function start_control_server()
         end
     end)
 
-    HTTP.register!(router, "POST", "/pause", function(req)
-        patch_config!(Dict{String,Any}("paused" => true))
-        HTTP.Response(200, "{\"ok\":true}")
-    end)
-
-    HTTP.register!(router, "POST", "/resume", function(req)
-        patch_config!(Dict{String,Any}("paused" => false))
-        HTTP.Response(200, "{\"ok\":true}")
-    end)
+    HTTP.register!(router, "POST", "/pause",  req -> (patch_config!(Dict{String,Any}("paused" => true));  HTTP.Response(200, "{\"ok\":true}")))
+    HTTP.register!(router, "POST", "/resume", req -> (patch_config!(Dict{String,Any}("paused" => false)); HTTP.Response(200, "{\"ok\":true}")))
 
     HTTP.register!(router, "POST", "/reload", function(req)
         client = CLIENT_REF[]; gid = CURRENT_GAME_ID[]
         gid !== nothing && client !== nothing &&
             try BongCloud.resign_game(client, gid) catch; end
-        reload_model!()
+        load_engine_setup!()
         HTTP.Response(200, "{\"ok\":true}")
     end)
 
     HTTP.register!(router, "GET", "/health", req -> HTTP.Response(200, "{\"ok\":true}"))
 
-    HTTP.register!(router, "GET", "/engine_config", function(req)
-        body = JSON3.write(Cassandra.engine_cfg_to_dict(Cassandra.get_engine_cfg()))
-        HTTP.Response(200, ["Content-Type" => "application/json"], body)
-    end)
+    HTTP.register!(router, "GET", "/engine_config", req ->
+        HTTP.Response(200, ["Content-Type" => "application/json"],
+            JSON3.write(Cassandra.engine_cfg_to_dict(Cassandra.get_engine_cfg()))))
 
-    HTTP.register!(router, "GET", "/engine_config/schema", function(req)
-        body = JSON3.write(Cassandra.ENGINE_CONFIG_SCHEMA)
-        HTTP.Response(200, ["Content-Type" => "application/json"], body)
-    end)
+    HTTP.register!(router, "GET", "/engine_config/schema", req ->
+        HTTP.Response(200, ["Content-Type" => "application/json"],
+            JSON3.write(Cassandra.ENGINE_CONFIG_SCHEMA)))
 
     HTTP.register!(router, "POST", "/engine_config", function(req)
         try
             d   = JSON3.read(String(req.body), Dict{String,Any})
             cfg = Cassandra.engine_cfg_from_dict(d)
             Cassandra.apply_engine_cfg!(cfg)
-            # Persist as deployed setup
             Cassandra.save_engine_cfg(cfg, _deployed_setup_path())
             lock(SETUP_LOCK) do
                 SETUP_META[] = Dict{String,Any}("name" => cfg.name, "hash" => Cassandra.cfg_hash(cfg))
@@ -736,11 +618,8 @@ function run()
     OWN_RATING[] = _perf_rating(profile)
     @info "Bot online as $(OWN_NAME[]) (rating: $(something(OWN_RATING[], "unrated")))"
 
-    let board = Cassandra.apply_moves("", Cassandra.START_FEN)
-        m = current_model()
-        Cassandra.select_move(m, board)
-        m !== nothing && Cassandra.policy_info(m, board)
-    end
+    # JIT warmup of the search hot path
+    Cassandra.select_move(Cassandra.apply_moves(""))
     @info "JIT warmup done"
 
     @async matchmaker_loop(client)

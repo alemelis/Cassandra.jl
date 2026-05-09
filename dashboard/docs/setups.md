@@ -1,14 +1,16 @@
 # Engine setups
 
 A **setup** is a named JSON file that fully defines how Cassandra plays:
-search depth, evaluation bonuses, move-ordering heuristics, book usage, and
-which checkpoint to load for policy logits. Every game played is tagged with
-the active setup's name and short hash, so any result in `bot_log.jsonl` can
-be traced back to the exact configuration.
+search depth, evaluation bonuses, move-ordering heuristics, and book usage.
+Every game played is tagged with the active setup's name and short hash, so
+any result in `bot_log.jsonl` can be traced back to the exact configuration.
 
 Conceptually: a setup is the engine's deployable unit. Tuning happens by
 cloning a setup, flipping one knob, deploying, and comparing arena win rates
 between the two `setup_hash` values.
+
+`setups/deployed.json` is the **single source of truth** for engine knobs at
+runtime. The bot reads it on start and on every `/reload`.
 
 ---
 
@@ -18,7 +20,6 @@ between the two `setup_hash` values.
 {
   "name": "classical_v1",
   "created_at": "2026-05-08T19:00:00Z",
-  "checkpoint": "silent_lasker",
 
   "search": {
     "max_depth": 12,
@@ -44,7 +45,6 @@ between the two `setup_hash` values.
   },
 
   "ordering": {
-    "use_policy_logits": false,
     "killers": true,
     "history": true
   },
@@ -52,10 +52,6 @@ between the two `setup_hash` values.
   "book": { "enabled": true, "max_ply": 16 }
 }
 ```
-
-`checkpoint` references a `.jld2` file in `checkpoints/`. It is loaded only
-when `ordering.use_policy_logits = true` (or, in the future, when the value
-head is wired into search).
 
 The full schema with min/max ranges, defaults, and per-field documentation
 links is in `Cassandra.ENGINE_CONFIG_SCHEMA` (`src/Config.jl`). The
@@ -106,8 +102,7 @@ rename.
 
 ```json
 {"ts":"...","game_id":"abc","result":"win",
- "setup_name":"classical_v1","setup_hash":"a3f8c2e1d09b",
- "model":"silent_lasker","deployed_epoch":12}
+ "setup_name":"classical_v1","setup_hash":"a3f8c2e1d09b"}
 ```
 
 Group by `setup_hash` to compare configurations:
@@ -158,27 +153,8 @@ games per arm to be sure.
 
 ---
 
-## Migration from checkpoint-only deploys
-
-If you previously deployed by selecting a checkpoint name:
-
-```bash
-julia --project scripts/migrate_to_setups.jl
-```
-
-This reads the current deployed checkpoint and bot config, writes
-`setups/legacy_<name>.json`, copies it to `setups/deployed.json`, and the bot
-loads it on next restart.
-
----
-
 ## Tips
 
-- **Policy logits.** Set `ordering.use_policy_logits = true` to use the NN
-  policy head as a move-ordering tiebreaker (requires a trained checkpoint
-  in `checkpoint`). Adds latency per node (a forward pass). Worth it only
-  when the policy is meaningfully stronger than the existing classical
-  ordering — currently a wash with puzzle-only training.
 - **Time vs depth.** `time_limit_s` *and* `max_depth` are both upper bounds;
   whichever fires first wins. For arena testing set `time_limit_s` to a
   match your TC; for analysis set `max_depth` to a fixed value and

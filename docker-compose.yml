@@ -9,30 +9,11 @@ services:
             - STOCKFISH_ELO=${STOCKFISH_ELO:-1500}
             - GAMES=${GAMES:-100}
             - MOVE_TIME=${MOVE_TIME:-1.0}
-            - CHECKPOINTS_DIR=/data/checkpoints
             - SETUPS_DIR=/data/setups
             - LOGS_DIR=/data/logs
         volumes:
-            - checkpoints:/data/checkpoints
             - setups:/data/setups
             - logs:/data/logs
-        networks:
-            - internal
-        restart: "no"
-
-    trainer:
-        profiles: [train]
-        build:
-            context: ..
-            dockerfile: Cassandra.jl/Dockerfile.julia
-        command: julia --project=. scripts/train.jl
-        environment:
-            - CHECKPOINTS_DIR=/data/checkpoints
-            - LOGS_DIR=/data/logs
-        volumes:
-            - checkpoints:/data/checkpoints
-            - logs:/data/logs
-            - ./data:/app/data
         networks:
             - internal
         restart: "no"
@@ -44,12 +25,10 @@ services:
         command: julia --project=. bot/main.jl
         environment:
             - LICHESS_TOKEN=${LICHESS_TOKEN}
-            - CHECKPOINTS_DIR=/data/checkpoints
             - LOGS_DIR=/data/logs
             - SETUPS_DIR=/data/setups
             - BOT_CONTROL_PORT=8080
         volumes:
-            - checkpoints:/data/checkpoints
             - logs:/data/logs
             - setups:/data/setups
         networks:
@@ -63,20 +42,15 @@ services:
         environment:
             - PORT=8000
             - LICHESS_TOKEN=${LICHESS_TOKEN}
-            - CHECKPOINTS_DIR=/data/checkpoints
             - LOGS_DIR=/data/logs
             - SETUPS_DIR=/data/setups
             - BOT_CONTROL_URL=http://bot:8080
             - DASHBOARD_SECRET=${DASHBOARD_SECRET:-}
-            - TRAINER_IMAGE=cassandrajl-trainer
             - ARENA_IMAGE=cassandrajl-arena
             - COMPOSE_PROJECT=cassandrajl
-            - DATA_DIR_HOST=${PWD}/data
         volumes:
-            - checkpoints:/data/checkpoints
             - logs:/data/logs
             - setups:/data/setups
-            - ./data:/app/data:ro
             - ./dashboard:/app/dashboard:ro
             - /var/run/docker.sock:/var/run/docker.sock
         ports:
@@ -86,12 +60,6 @@ services:
         restart: unless-stopped
 
 volumes:
-    checkpoints:
-        driver: local
-        driver_opts:
-            type: none
-            o: bind
-            device: ${PWD}/checkpoints
     logs:
         driver: local
         driver_opts:

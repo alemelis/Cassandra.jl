@@ -1,8 +1,6 @@
 # Evaluation
 
-Cassandra uses a **classical tapered evaluation** at every leaf. No neural
-network is consulted in the search hot path; the network's value head is
-trained but not yet wired into search (see [Roadmap](roadmap.md)). Score is
+Cassandra uses a **classical tapered evaluation** at every leaf. Score is
 always reported from the **side-to-move's perspective** in centipawns
 (100 cp ≈ one pawn), so negamax can negate when recursing.
 
@@ -23,10 +21,9 @@ A small classical eval is:
   reaches ~2200–2400 Elo when paired with a competent search. Stockfish
   played at this level for years before NNUE.
 
-NNUE-style network eval would be a 200+ Elo upgrade, but it requires
-incremental updates on make/unmake (which Bobby doesn't yet do) and a
-training pipeline keyed to position-evals, not move-targets. It's on the
-roadmap but not the next step.
+The next eval gains come from **Texel-tuning** the existing PSQT and
+structural coefficients on labelled positions, then layering in king safety,
+passed pawns, and mobility. See the [Roadmap](roadmap.md).
 
 ---
 

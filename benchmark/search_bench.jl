@@ -122,7 +122,7 @@ function search_nps(b, depth)
     cfg.search.time_limit_s = 600.0
     Cassandra.tt_clear!()
     # Warmup
-    Cassandra.search(nothing, b)
+    Cassandra.search(b)
     Cassandra.tt_clear!()
 
     # Time it. Single trial — search at fixed depth is deterministic and slow,
@@ -137,7 +137,7 @@ function search_nps(b, depth)
         # The public `search` does not return nodes; we instrument via the
         # _negamax counter which lives in SearchContext per call.
         # Easiest: time `search` and use the `Cassandra._global_nodes` if any.
-        Cassandra.search(nothing, b)
+        Cassandra.search(b)
         elapsed = (time_ns() - t0) / 1e9
         t_best = min(t_best, elapsed)
     end
@@ -164,7 +164,7 @@ function instrumented_search(b, depth)
     seen = Set{UInt64}()
     deadline = time() + 600.0
     # Warmup
-    _negamax(nothing, b, depth, -INF_SCORE, INF_SCORE, 0, deadline, seen, ctx, cfg)
+    _negamax(b, depth, -INF_SCORE, INF_SCORE, 0, deadline, seen, ctx, cfg)
     # Measure
     t_best = Inf
     nodes_best = 0
@@ -174,7 +174,7 @@ function instrumented_search(b, depth)
         seen2 = Set{UInt64}()
         deadline = time() + 600.0
         t0 = time_ns()
-        _negamax(nothing, b, depth, -INF_SCORE, INF_SCORE, 0, deadline, seen2, ctx2, cfg)
+        _negamax(b, depth, -INF_SCORE, INF_SCORE, 0, deadline, seen2, ctx2, cfg)
         elapsed = (time_ns() - t0) / 1e9
         if elapsed < t_best
             t_best = elapsed
@@ -234,7 +234,7 @@ for (name, fen) in POSITIONS
     Cassandra.tt_clear!()
 
     # Warmup
-    Cassandra.search(nothing, b)
+    Cassandra.search(b)
 
     Cassandra.tt_clear!()
     ctx = SearchContext()
@@ -250,7 +250,7 @@ for (name, fen) in POSITIONS
         time() > deadline && break
         ctx_d = SearchContext()
         seen_d = Set{UInt64}()
-        _negamax(nothing, b, d, -INF_SCORE, INF_SCORE, 0, deadline, seen_d, ctx_d, cfg)
+        _negamax(b, d, -INF_SCORE, INF_SCORE, 0, deadline, seen_d, ctx_d, cfg)
         if time() <= deadline
             depth_reached = d
             nodes += ctx_d.nodes
@@ -308,7 +308,7 @@ let b = board("")
         Cassandra.tt_clear!()
         # Warmup
         ctx0 = SearchContext(); seen0 = Set{UInt64}()
-        _negamax(nothing, b, 6, -INF_SCORE, INF_SCORE, 0, time()+600.0, seen0, ctx0, cfg)
+        _negamax(b, 6, -INF_SCORE, INF_SCORE, 0, time()+600.0, seen0, ctx0, cfg)
 
         # Measure
         t_best = Inf; n_best = 0
@@ -316,7 +316,7 @@ let b = board("")
             Cassandra.tt_clear!()
             ctx = SearchContext(); seen = Set{UInt64}()
             t0 = time_ns()
-            _negamax(nothing, b, 6, -INF_SCORE, INF_SCORE, 0, time()+600.0, seen, ctx, cfg)
+            _negamax(b, 6, -INF_SCORE, INF_SCORE, 0, time()+600.0, seen, ctx, cfg)
             el = (time_ns() - t0) / 1e9
             if el < t_best; t_best = el; n_best = ctx.nodes; end
         end
@@ -355,10 +355,10 @@ let b = board("")
         cfg.search.max_depth = d
         Cassandra.tt_clear!()
         ctx0 = SearchContext(); seen0 = Set{UInt64}()
-        _negamax(nothing, b, d, -INF_SCORE, INF_SCORE, 0, time()+600.0, seen0, ctx0, cfg)
+        _negamax(b, d, -INF_SCORE, INF_SCORE, 0, time()+600.0, seen0, ctx0, cfg)
         Cassandra.tt_clear!()
         ctx = SearchContext(); seen = Set{UInt64}()
-        t_search = @elapsed _negamax(nothing, b, d, -INF_SCORE, INF_SCORE, 0, time()+600.0, seen, ctx, cfg)
+        t_search = @elapsed _negamax(b, d, -INF_SCORE, INF_SCORE, 0, time()+600.0, seen, ctx, cfg)
         search_nps = ctx.nodes / t_search
         @printf("d%-6d  %14s  %14s  %12s  %12s  %7.1fx\n",
             d, format_int(perft_nodes), format_int(ctx.nodes),

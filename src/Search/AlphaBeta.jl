@@ -1,6 +1,5 @@
 # Classical alpha-beta search with iterative deepening.
-# No neural network in the hot path — classical eval at leaves, policy logits
-# used only if ordering.use_policy_logits is set in the active EngineConfig.
+# PeSTO eval at leaves; killers/history/TT for ordering. No neural network.
 
 const _ABORT_SCORE = 0f0
 
@@ -8,11 +7,8 @@ const _ABORT_SCORE = 0f0
 # Bobby has no built-in null move; we construct one by toggling the active side
 # and clearing en-passant, with a fresh Zobrist hash.
 @inline function _make_null_move(board::Bobby.Board)::Bobby.Board
-    # Build a position where the other side moves without making a move.
-    # We keep all pieces as-is, flip active, clear ep, bump halfmove.
     active = !board.active
     ep     = UInt64(0)
-    # Recompute hash: flip side, remove old ep key if any
     h = Bobby.computeHash(Bobby.Board(board.white, board.black, board.taken,
                                       active, board.castling, ep,
                                       board.halfmove + 1, board.fullmove + 1,
@@ -28,15 +24,16 @@ end
     (side.N | side.B | side.R | side.Q) != UInt64(0)
 end
 
+@inline time_exceeded(deadline::Float64) = time() > deadline
+
 # ── Quiescence search ────────────────────────────────────────────────────────
 function _qsearch(board::Bobby.Board, alpha::Float32, beta::Float32,
                   ply::Int, deadline::Float64, ctx::SearchContext,
                   cfg::EngineConfig)::Float32
 
-    time() > deadline && return _ABORT_SCORE
+    time_exceeded(deadline) && return _ABORT_SCORE
     ctx.nodes += 1
 
-    # Stand-pat
     stand_pat = classical_eval(board,
                                cfg.eval.bishop_pair_cp,
                                cfg.eval.rook_open_cp,
@@ -46,19 +43,17 @@ function _qsearch(board::Bobby.Board, alpha::Float32, beta::Float32,
 
     all_moves = Bobby.getMoves(board, board.active)
     order = Vector{Int16}()
-    order_moves!(order, all_moves.moves, nothing, Int16(0),
+    order_moves!(order, all_moves.moves, Int16(0),
                  (Int16(0), Int16(0)), ctx.history)
 
     delta_margin = Float32(cfg.search.delta_pruning_margin_cp)
 
     for i in order
         m = all_moves.moves[i]
-        # Only captures and queen promotions
-        is_capture   = m.take.type != 0
-        is_qpromo    = m.promotion == Bobby.PIECE_QUEEN
+        is_capture = m.take.type != 0
+        is_qpromo  = m.promotion == Bobby.PIECE_QUEEN
         (is_capture || is_qpromo) || continue
 
-        # Delta pruning: skip clearly losing captures
         if is_capture
             gain = _CAPTURE_VALS[Int(m.take.type) + 1]
             stand_pat + gain + delta_margin < alpha && continue
@@ -66,9 +61,9 @@ function _qsearch(board::Bobby.Board, alpha::Float32, beta::Float32,
 
         child = Bobby.makeMove(board, m)
         score = -_qsearch(child, -beta, -alpha, ply + 1, deadline, ctx, cfg)
-        time() > deadline && return _ABORT_SCORE
+        time_exceeded(deadline) && return _ABORT_SCORE
 
-        score >= beta  && return beta
+        score >= beta && return beta
         alpha = max(alpha, score)
     end
 
@@ -76,14 +71,13 @@ function _qsearch(board::Bobby.Board, alpha::Float32, beta::Float32,
 end
 
 # ── Main negamax ─────────────────────────────────────────────────────────────
-function _negamax(model::Union{CassandraModel,Nothing},
-                  board::Bobby.Board, depth::Int,
+function _negamax(board::Bobby.Board, depth::Int,
                   alpha::Float32, beta::Float32,
                   ply::Int, deadline::Float64,
                   seen::Set{UInt64}, ctx::SearchContext,
                   cfg::EngineConfig)::Float32
 
-    time() > deadline && return _ABORT_SCORE
+    time_exceeded(deadline) && return _ABORT_SCORE
 
     # Repetition on search path → draw
     board.hash in seen && return 0f0
@@ -103,9 +97,7 @@ function _negamax(model::Union{CassandraModel,Nothing},
     in_check = Bobby.inCheck(board, board.active)
 
     # Check extension
-    if cfg.search.check_extension && in_check
-        depth += 1
-    end
+    cfg.search.check_extension && in_check && (depth += 1)
 
     if depth <= 0
         cfg.search.qsearch && return _qsearch(board, alpha, beta, ply, deadline, ctx, cfg)
@@ -122,22 +114,20 @@ function _negamax(model::Union{CassandraModel,Nothing},
         null_board = _make_null_move(board)
         R = cfg.search.null_move_R
         push!(seen, board.hash)
-        null_score = -_negamax(model, null_board, depth - 1 - R,
+        null_score = -_negamax(null_board, depth - 1 - R,
                                -beta, -beta + 1f0,
                                ply + 1, deadline, seen, ctx, cfg)
         delete!(seen, board.hash)
-        if time() > deadline; return _ABORT_SCORE; end
+        time_exceeded(deadline) && return _ABORT_SCORE
         null_score >= beta && return beta
     end
 
     # Move ordering
-    logits  = cfg.ordering.use_policy_logits && model !== nothing ?
-              forward(model, board)[2] : nothing
     killers = cfg.ordering.killers ? ctx.killers[min(ply + 1, MAX_PLY)] :
                                      (Int16(0), Int16(0))
     hist    = cfg.ordering.history ? ctx.history : zeros(Int32, 7, 64)
     order   = Vector{Int16}()
-    order_moves!(order, legal.moves, logits, tt_best, killers, hist)
+    order_moves!(order, legal.moves, tt_best, killers, hist)
 
     push!(seen, board.hash)
 
@@ -157,18 +147,18 @@ function _negamax(model::Union{CassandraModel,Nothing},
             reduction = cfg.search.lmr_reduction
         end
 
-        child_score = -_negamax(model, child, depth - 1 - reduction,
+        child_score = -_negamax(child, depth - 1 - reduction,
                                 -beta, -alpha,
                                 ply + 1, deadline, seen, ctx, cfg)
 
         # Re-search at full depth if LMR failed high
         if reduction > 0 && child_score > alpha && !time_exceeded(deadline)
-            child_score = -_negamax(model, child, depth - 1,
+            child_score = -_negamax(child, depth - 1,
                                     -beta, -alpha,
                                     ply + 1, deadline, seen, ctx, cfg)
         end
 
-        if time() > deadline
+        if time_exceeded(deadline)
             aborted = true
             break
         end
@@ -180,7 +170,6 @@ function _negamax(model::Union{CassandraModel,Nothing},
         if child_score > alpha
             alpha = child_score
             if alpha >= beta
-                # Beta-cutoff: update killers and history
                 update_ordering!(ctx, m, Int16(i), ply, depth)
                 break
             end
@@ -197,10 +186,8 @@ function _negamax(model::Union{CassandraModel,Nothing},
     return best_score
 end
 
-@inline time_exceeded(deadline::Float64) = time() > deadline
-
 # ── Iterative-deepening root search ──────────────────────────────────────────
-function search(model::Union{CassandraModel,Nothing}, board::Bobby.Board;
+function search(board::Bobby.Board;
                 cfg::EngineConfig=get_engine_cfg())::Union{String,Nothing}
     legal = Bobby.getMoves(board, board.active)
     isempty(legal.moves) && return nothing
@@ -210,17 +197,14 @@ function search(model::Union{CassandraModel,Nothing}, board::Bobby.Board;
     ctx      = SearchContext()
     seen     = Set{UInt64}()
 
-    logits = cfg.ordering.use_policy_logits && model !== nothing ?
-             forward(model, board)[2] : nothing
-
     order = Vector{Int16}()
-    order_moves!(order, legal.moves, logits, Int16(0), (Int16(0), Int16(0)), ctx.history)
+    order_moves!(order, legal.moves, Int16(0), (Int16(0), Int16(0)), ctx.history)
 
     best_move  = legal.moves[order[1]]
     prev_score = 0f0
 
     for depth in 1:scfg.max_depth
-        time() > deadline && break
+        time_exceeded(deadline) && break
         reset_ctx!(ctx)
 
         window = Float32(scfg.aspiration_window_cp)
@@ -241,9 +225,9 @@ function search(model::Union{CassandraModel,Nothing}, board::Bobby.Board;
 
             for i in order
                 child = Bobby.makeMove(board, legal.moves[i])
-                score = -_negamax(model, child, depth - 1, -beta, -alpha,
+                score = -_negamax(child, depth - 1, -beta, -alpha,
                                   1, deadline, seen, ctx, cfg)
-                if time() > deadline
+                if time_exceeded(deadline)
                     timed_out = true
                     break
                 end
@@ -257,7 +241,6 @@ function search(model::Union{CassandraModel,Nothing}, board::Bobby.Board;
 
             timed_out && break
 
-            # Re-search with widened window on aspiration failure
             if window > 0f0
                 if iter_best_score <= lo
                     lo = -INF_SCORE; continue
@@ -296,8 +279,7 @@ function search(model::Union{CassandraModel,Nothing}, board::Bobby.Board;
 end
 
 # ── Bot entry point ──────────────────────────────────────────────────────────
-function select_move(model::Union{CassandraModel,Nothing},
-                     board::Bobby.Board)::Union{String,Nothing}
+function select_move(board::Bobby.Board)::Union{String,Nothing}
     cfg = get_engine_cfg()
     if cfg.book.enabled && Book.enabled()
         bm = Book.probe(board)
@@ -306,5 +288,5 @@ function select_move(model::Union{CassandraModel,Nothing},
             return bm
         end
     end
-    return search(model, board; cfg)
+    return search(board; cfg)
 end
