@@ -2092,7 +2092,8 @@
             function closeReplay() {
                 const v = document.getElementById("replay-viewer");
                 if (v) v.style.display = "none";
-                _replay.steps = [];
+                _replay.steps  = [];
+                _replay.plies  = [];
                 _replay.gameId = null;
             }
 
@@ -2112,8 +2113,21 @@
                     const header = JSON.parse(lines[0]);
                     _replay.initFen = header.initial_fen || null;
                     _replay.color = header.color || "white";
-                    _replay.steps = lines.slice(1).map((l) => JSON.parse(l));
-                    _replay.idx = 0;
+                    const steps = lines.slice(1).map((l) => JSON.parse(l));
+                    // Flatten trace into ply list — each entry is one half-move.
+                    // The last step's moves_before captures every opponent reply
+                    // up to Cassandra's final decision; append step.move for the
+                    // tail.
+                    let plies = [];
+                    if (steps.length) {
+                        const last = steps[steps.length - 1];
+                        const before = (last.moves_before || "").trim().split(/\s+/).filter(Boolean);
+                        plies = [...before];
+                        if (last.move) plies.push(last.move);
+                    }
+                    _replay.steps = steps;
+                    _replay.plies = plies;
+                    _replay.idx = 0;   // 0 = start position; k = after plies[k-1]
 
                     const g = state.allGames.find((x) => x.game_id === gameId);
                     $("r-badge").className = "badge " + (g ? g.result : "draw");
@@ -2121,7 +2135,7 @@
                         g && g.result ? g.result[0].toUpperCase() : "?";
                     $("r-title").textContent = `vs ${header.opponent || "?"}`;
                     $("r-sub").textContent =
-                        `as ${_replay.color} · ${_replay.steps.length} traced moves`;
+                        `as ${_replay.color} · ${plies.length} plies`;
                     $("r-link").href = `https://lichess.org/${gameId}`;
                     $("replay-mid").style.display = "";
 
@@ -2151,74 +2165,60 @@
             }
 
             function renderReplayStep() {
-                const { steps, idx } = _replay;
+                const plies = _replay.plies || [];
+                const idx   = _replay.idx;             // 0..plies.length
                 $("r-prev").disabled = idx <= 0;
-                $("r-next").disabled = idx >= steps.length - 1;
-                $("r-pos").textContent = steps.length
-                    ? `Move ${idx + 1} / ${steps.length}`
-                    : "—";
-                if (!steps.length) return;
-                const step = steps[idx];
-                const prevStep = idx > 0 ? steps[idx - 1] : null;
+                $("r-next").disabled = idx >= plies.length;
 
-                if (_replay.board && window.Chess) {
-                    try {
-                        const chess = _replay.initFen
-                            ? new Chess(_replay.initFen)
-                            : new Chess();
-                        chess.load && _replay.initFen && chess.load(_replay.initFen);
-                        const prior = step.moves_before
-                            ? step.moves_before.trim().split(/\s+/).filter(Boolean)
-                            : [];
-                        const uciMove = (m) =>
-                            chess.move({
-                                from: m.slice(0, 2),
-                                to: m.slice(2, 4),
-                                promotion: m[4] || "q",
-                            });
-                        prior.forEach(uciMove);
-                        // Last move played to highlight: opponent's reply if present,
-                        // otherwise Cassandra's own move on this ply.
-                        let lastMove = null;
-                        if (step.move) {
-                            uciMove(step.move);
-                            lastMove = [step.move.slice(0, 2), step.move.slice(2, 4)];
-                        }
-                        if (prevStep) {
-                            const prevMoves = (prevStep.moves_before || "").trim().split(/\s+/).filter(Boolean);
-                            const currMoves = (step.moves_before || "").trim().split(/\s+/).filter(Boolean);
-                            // currMoves[prevMoves.length + 1] = opponent's reply after our prev move
-                            const opp = currMoves[prevMoves.length + 1];
-                            if (opp && opp.length >= 4) {
-                                lastMove = [opp.slice(0, 2), opp.slice(2, 4)];
-                            }
-                        }
-                        _replay.board.set({
-                            fen: chess.fen(),
-                            lastMove,
-                            turnColor: chess.turn() === "w" ? "white" : "black",
-                            check: chess.in_check(),
+                // Move number (1-based) and side that just moved
+                if (!plies.length) {
+                    $("r-pos").textContent = "—";
+                } else if (idx === 0) {
+                    $("r-pos").textContent = `Start · ${plies.length} plies`;
+                } else {
+                    const moveNo = Math.ceil(idx / 2);
+                    // White moves on odd plies (idx 1,3,…); ply idx tells us who:
+                    // ply 1 = white's move 1; ply 2 = black's move 1; …
+                    const whiteJustMoved = (idx % 2) === 1;
+                    const sideJustMoved  = whiteJustMoved ? "white" : "black";
+                    const ours = sideJustMoved === _replay.color;
+                    const who  = ours ? "Cassandra" : "opponent";
+                    $("r-pos").textContent =
+                        `${moveNo}${whiteJustMoved ? "." : "…"} ${plies[idx - 1]}  · ${who}`;
+                }
+
+                if (!_replay.board || !window.Chess) return;
+                try {
+                    const chess = _replay.initFen ? new Chess(_replay.initFen) : new Chess();
+                    chess.load && _replay.initFen && chess.load(_replay.initFen);
+                    const uciMove = (m) =>
+                        chess.move({
+                            from: m.slice(0, 2),
+                            to: m.slice(2, 4),
+                            promotion: m[4] || "q",
                         });
-                    } catch (e) {
-                        console.warn("replay render:", e);
-                    }
+                    for (let k = 0; k < idx; k++) uciMove(plies[k]);
+                    const last = idx > 0 ? plies[idx - 1] : null;
+                    _replay.board.set({
+                        fen: chess.fen(),
+                        lastMove: last ? [last.slice(0, 2), last.slice(2, 4)] : null,
+                        turnColor: chess.turn() === "w" ? "white" : "black",
+                        check: chess.in_check(),
+                    });
+                } catch (e) {
+                    console.warn("replay render:", e);
                 }
             }
             function replayPrev() {
-                if (_replay.idx > 0) {
-                    _replay.idx--;
-                    renderReplayStep();
-                }
+                if (_replay.idx > 0) { _replay.idx--; renderReplayStep(); }
             }
             function replayNext() {
-                if (_replay.idx < _replay.steps.length - 1) {
-                    _replay.idx++;
-                    renderReplayStep();
-                }
+                const total = (_replay.plies || []).length;
+                if (_replay.idx < total) { _replay.idx++; renderReplayStep(); }
             }
 
             document.addEventListener("keydown", (e) => {
-                if (!_replay.steps.length) return;
+                if (!(_replay.plies || []).length) return;
                 if (e.key === "ArrowLeft") {
                     e.preventDefault();
                     replayPrev();
