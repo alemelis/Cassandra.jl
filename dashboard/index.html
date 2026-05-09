@@ -495,6 +495,44 @@
                 color: #e07040;
             }
 
+            /* TC checkbox grid (bot control card) */
+            .tc-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+                margin-top: 0.35rem;
+            }
+            .tc-grid .tc-group {
+                display: flex;
+                flex-direction: column;
+                gap: 0.2rem;
+                padding: 0.35rem 0.55rem;
+                border: 1px solid var(--border, #333);
+                border-radius: 6px;
+            }
+            .tc-grid .tc-group-label {
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                opacity: 0.65;
+            }
+            .tc-grid .tc-group-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.4rem;
+            }
+            .tc-grid label {
+                font-size: 0.85rem;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.25rem;
+                cursor: pointer;
+                user-select: none;
+            }
+            .tc-grid input[type="checkbox"] {
+                margin: 0;
+            }
+
             /* Buttons */
             .btn {
                 display: inline-flex;
@@ -709,15 +747,8 @@
 
             /* Replay */
             .replay-grid {
-                display: grid;
-                grid-template-columns: minmax(0, 360px) 1fr;
-                gap: 1.25rem;
-                align-items: start;
-            }
-            @media (max-width: 700px) {
-                .replay-grid {
-                    grid-template-columns: 1fr;
-                }
+                display: flex;
+                justify-content: center;
             }
             #replay-board {
                 width: 100%;
@@ -735,83 +766,6 @@
                 font-size: 12px;
                 color: var(--text-muted);
             }
-            .nn-row {
-                margin-bottom: 1rem;
-            }
-            .nn-label {
-                font-size: 10px;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: var(--text-muted);
-                margin-bottom: 4px;
-            }
-            .nn-value {
-                font-family: monospace;
-                font-size: 13px;
-            }
-            .value-bar {
-                position: relative;
-                height: 8px;
-                background: var(--border);
-                border-radius: 4px;
-                overflow: hidden;
-                margin-bottom: 4px;
-            }
-            .value-bar-mid {
-                position: absolute;
-                left: 50%;
-                top: 0;
-                bottom: 0;
-                width: 1px;
-                background: var(--text-muted);
-                opacity: 0.5;
-            }
-            .value-bar-fill {
-                position: absolute;
-                height: 100%;
-                transition:
-                    left 0.25s,
-                    width 0.25s,
-                    background 0.25s;
-            }
-            .pol-row {
-                display: flex;
-                align-items: center;
-                gap: 6px;
-                font-size: 11px;
-                margin-bottom: 4px;
-            }
-            .pol-move {
-                font-family: monospace;
-                width: 42px;
-                flex-shrink: 0;
-            }
-            .pol-move.played {
-                color: var(--green);
-                font-weight: 600;
-            }
-            .pol-track {
-                flex: 1;
-                height: 6px;
-                background: var(--border);
-                border-radius: 3px;
-                overflow: hidden;
-            }
-            .pol-fill {
-                height: 100%;
-                background: var(--accent);
-            }
-            .pol-fill.played {
-                background: var(--green);
-            }
-            .pol-prob {
-                width: 38px;
-                text-align: right;
-                color: var(--text-muted);
-                font-family: monospace;
-                flex-shrink: 0;
-            }
-
             footer {
                 text-align: center;
                 font-size: 11px;
@@ -963,6 +917,137 @@
                     font-size: 11px;
                 }
             }
+            /* ─── Docs sidebar ────────────────────────────────────────── */
+            .docs-grid {
+                display: grid;
+                grid-template-columns: 220px 1fr;
+                gap: 1rem;
+                align-items: start;
+            }
+            .docs-sidebar {
+                padding: 1rem 0.75rem;
+                position: sticky;
+                top: 1rem;
+                max-height: calc(100vh - 2rem);
+                overflow-y: auto;
+                font-size: 13px;
+            }
+            .docs-sidebar-title {
+                font-family: "DM Serif Display", serif;
+                font-size: 17px;
+                margin: 0 0 0.6rem 0.4rem;
+                color: var(--text-muted);
+            }
+            #docs-nav { display: flex; flex-direction: column; gap: 0.1rem; }
+            #docs-nav a.docs-page {
+                color: var(--text);
+                text-decoration: none;
+                padding: 0.32rem 0.5rem;
+                border-radius: 4px;
+                font-weight: 600;
+                font-size: 13px;
+            }
+            #docs-nav a.docs-page:hover { background: rgba(255,255,255,0.05); }
+            #docs-nav a.docs-page.active {
+                background: var(--accent, #2563eb);
+                color: #fff;
+            }
+            #docs-nav a.docs-anchor {
+                color: var(--text-muted);
+                text-decoration: none;
+                padding: 0.18rem 0.5rem 0.18rem 1.4rem;
+                font-size: 12px;
+                border-left: 2px solid transparent;
+                margin-left: 0.5rem;
+            }
+            #docs-nav a.docs-anchor:hover { color: var(--text); }
+            #docs-nav a.docs-anchor.active {
+                color: var(--accent, #2563eb);
+                border-left-color: var(--accent, #2563eb);
+            }
+            #docs-content section.doc-page {
+                scroll-margin-top: 1rem;
+                padding-bottom: 2rem;
+                border-bottom: 1px dashed var(--border);
+                margin-bottom: 2rem;
+            }
+            #docs-content section.doc-page:last-child {
+                border-bottom: none;
+            }
+            @media (max-width: 900px) {
+                .docs-grid { grid-template-columns: 1fr; }
+                .docs-sidebar { position: static; max-height: none; }
+            }
+
+            #arena-board { width: 280px; }
+            .arena-replay-grid { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start; }
+            @media (max-width: 640px) { .arena-replay-grid { grid-template-columns: 1fr; } #arena-board { width: 100%; } }
+            .arena-log-box {
+                background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+                font-family: monospace; font-size: 11px; padding: 8px; height: 160px;
+                overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: var(--text-muted);
+            }
+            .arena-nav { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+            .arena-game-sel { font-size: 12px; color: var(--text-muted); }
+
+            /* ─── Setups page (mobile-first) ───────────────────────────
+               Single column by default; sidebar+editor side-by-side ≥720px. */
+            .setups-grid {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 1rem;
+                align-items: start;
+            }
+            @media (min-width: 720px) {
+                .setups-grid { grid-template-columns: 240px 1fr; }
+            }
+
+            /* Setup-editor field row: stacked on phones, two-col on tablet+. */
+            .sf-row {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 0.4rem;
+                padding: 0.4rem 0;
+                align-items: start;
+            }
+            .sf-row .sf-input {
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                flex-wrap: wrap;
+                justify-self: start;
+            }
+            @media (min-width: 600px) {
+                .sf-row {
+                    grid-template-columns: minmax(0, 1.2fr) auto;
+                    gap: 1rem;
+                }
+                .sf-row .sf-input { justify-self: end; }
+            }
+            .sf-num {
+                width: 110px;
+                max-width: 40vw;
+                padding: 0.35rem 0.5rem;
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                background: var(--bg);
+                color: var(--text);
+                font-size: 0.88rem;
+                text-align: right;
+            }
+
+            /* ─── Global mobile tightening ─────────────────────────── */
+            @media (max-width: 600px) {
+                main { padding: 1rem 0.6rem 3rem; }
+                .card { padding: 0.85rem 0.9rem; margin-bottom: 1rem; }
+                h2 { font-size: 19px; margin: 1.25rem 0 0.6rem; }
+                .form-grid { grid-template-columns: 1fr 1fr; }
+                .nav-inner { padding: 0 0.6rem; gap: 6px; }
+                .nav-link { padding: 4px 6px; font-size: 12px; }
+            }
+            @media (max-width: 380px) {
+                .form-grid { grid-template-columns: 1fr; }
+            }
         </style>
     </head>
     <body>
@@ -970,7 +1055,9 @@
             <div class="nav-inner">
                 <span class="nav-brand"><img src="favicon_io/favicon-32x32.png" width="22" height="22" style="vertical-align:-5px;margin-right:5px;border-radius:4px" alt="">Cassandra</span>
                 <a class="nav-link" data-view="bot">Bot</a>
-                <a class="nav-link" data-view="models">Models</a>
+                <a class="nav-link" data-view="arena">Arena</a>
+                <a class="nav-link" data-view="setups">Setups</a>
+                <a class="nav-link" data-view="book">Book</a>
                 <a class="nav-link" data-view="docs">Docs</a>
                 <span class="nav-spacer"></span>
                 <button
@@ -981,12 +1068,6 @@
                 >
                     ●&nbsp;bot
                 </button>
-                <span class="nav-dot" title="Trainer"
-                    ><span class="dot" id="dot-trainer"></span
-                    ><span class="nav-dot-label" id="trainer-text"
-                        >trainer</span
-                    ></span
-                >
                 <button class="btn-auth" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode" style="padding:4px 8px;font-size:14px;line-height:1">◑</button>
                 <button
                     class="btn-auth"
@@ -1027,16 +1108,16 @@
             <section class="view" data-view="bot">
                 <div class="status">
                     <div>
-                        <div class="status-label">Deployed model</div>
+                        <div class="status-label">Active setup</div>
                         <div class="status-value mono" id="s-model">—</div>
                     </div>
                     <div>
-                        <div class="status-label">Epoch</div>
-                        <div class="status-value" id="s-epoch">—</div>
+                        <div class="status-label">Depth</div>
+                        <div class="status-value mono" id="s-depth">—</div>
                     </div>
                     <div>
-                        <div class="status-label">Loss</div>
-                        <div class="status-value mono" id="s-loss">—</div>
+                        <div class="status-label">Time / move</div>
+                        <div class="status-value mono" id="s-tlim">—</div>
                     </div>
                     <div>
                         <div class="status-label">Record</div>
@@ -1125,27 +1206,6 @@
                                 </button>
                             </div>
                         </div>
-                        <div id="replay-nn">
-                            <div class="nn-row">
-                                <div class="nn-label">Value estimate</div>
-                                <div class="value-bar">
-                                    <div class="value-bar-mid"></div>
-                                    <div
-                                        class="value-bar-fill"
-                                        id="r-vfill"
-                                    ></div>
-                                </div>
-                                <span class="nn-value" id="r-vtext">—</span>
-                            </div>
-                            <div class="nn-row">
-                                <div class="nn-label">Policy entropy</div>
-                                <span class="nn-value" id="r-entropy">—</span>
-                            </div>
-                            <div class="nn-row">
-                                <div class="nn-label">Top-5 policy</div>
-                                <div id="r-bars"></div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -1183,17 +1243,6 @@
                         style="margin: 0.4rem 0 0.75rem; font-size: 0.88rem"
                     ></div>
                     <div class="form-grid">
-                        <div class="field">
-                            <label>Search depth (plies)</label>
-                            <input
-                                type="number"
-                                id="cfg-depth"
-                                min="1"
-                                max="10"
-                                step="1"
-                                onchange="saveBotConfig()"
-                            />
-                        </div>
                         <div class="field">
                             <label>Rating window low</label>
                             <input
@@ -1234,168 +1283,152 @@
                             />
                         </div>
                     </div>
+                    <div style="margin-top: 0.75rem">
+                        <label class="muted" style="font-size: 0.85rem">
+                            Time controls to challenge
+                        </label>
+                        <div id="cfg-tcs" class="tc-grid"></div>
+                    </div>
                 </div>
             </section>
 
-            <!-- ─── Models ─────────────────────────────────────────── -->
-            <section class="view" data-view="models">
-                <h3>Training loss</h3>
-                <div class="chart-legend">
-                    <span
-                        ><span
-                            class="legend-dot"
-                            style="background: #534ab7"
-                        ></span
-                        >Policy loss</span
-                    >
-                    <span
-                        ><span
-                            class="legend-dot"
-                            style="background: #888780"
-                        ></span
-                        >s / epoch</span
-                    >
-                    <span id="dep-legend" style="display: none">
-                        <span
-                            class="legend-dot"
-                            style="
-                                border-left: 2px dashed #5dcaa5;
-                                background: none;
-                                width: 2px;
-                                height: 12px;
-                            "
-                        ></span
-                        >Deployed
-                    </span>
-                </div>
-                <div class="chart-wrap"><canvas id="loss-chart"></canvas></div>
-
-                <h2>Checkpoints</h2>
-                <div class="tbl-wrap" id="ckpt-wrap">
-                    <span class="muted">Loading…</span>
-                </div>
-
-                <h2>Train new model</h2>
-                <div class="card" id="train-card">
+            <!-- ─── Arena ───────────────────────────────────────────── -->
+            <section class="view" data-view="arena">
+                <h2>Run a match</h2>
+                <div class="card" id="arena-run-card">
                     <div class="form-grid">
                         <div class="field">
-                            <label>Dataset</label>
-                            <select id="t-dataset"></select>
+                            <label>Stockfish Elo</label>
+                            <input type="number" id="a-elo" value="1500" min="100" max="3190" step="100" />
                         </div>
                         <div class="field">
-                            <label>Base model</label>
-                            <select id="t-base">
-                                <option value="">— fresh —</option>
-                            </select>
+                            <label>Games</label>
+                            <input type="number" id="a-games" value="100" min="4" step="10" />
                         </div>
                         <div class="field">
-                            <label>Trunk sizes</label>
-                            <input type="text" id="t-trunk" value="256,128" />
-                        </div>
-                        <div class="field">
-                            <label>Dropout</label>
-                            <input
-                                type="number"
-                                id="t-drop"
-                                value="0.1"
-                                min="0"
-                                max="0.9"
-                                step="0.05"
-                            />
-                        </div>
-                        <div class="field">
-                            <label>Epochs</label>
-                            <input
-                                type="number"
-                                id="t-epochs"
-                                value="20"
-                                min="1"
-                            />
-                        </div>
-                        <div class="field">
-                            <label>Batch size</label>
-                            <input
-                                type="number"
-                                id="t-batch"
-                                value="512"
-                                min="64"
-                            />
-                        </div>
-                        <div class="field">
-                            <label>Learning rate</label>
-                            <input type="text" id="t-lr" value="3e-4" />
-                        </div>
-                        <div class="field">
-                            <label>LR min (cosine)</label>
-                            <input type="text" id="t-lr-min" value="3e-6" />
-                        </div>
-                        <div class="field">
-                            <label>Weight decay</label>
-                            <input
-                                type="number"
-                                id="t-wd"
-                                value="1e-4"
-                                min="0"
-                                max="0.1"
-                                step="0.001"
-                            />
-                        </div>
-                        <div class="field">
-                            <label>Value weight</label>
-                            <input
-                                type="number"
-                                id="t-vw"
-                                value="0.0"
-                                min="0"
-                                max="1"
-                                step="0.05"
-                            />
-                        </div>
-                        <div class="field">
-                            <label>Eval games</label>
-                            <input
-                                type="number"
-                                id="t-eval"
-                                value="0"
-                                min="0"
-                            />
+                            <label>Sec / move</label>
+                            <input type="number" id="a-time" value="1.0" min="0.05" step="0.5" />
                         </div>
                     </div>
                     <div class="form-row">
-                        <button
-                            class="btn primary"
-                            id="t-start"
-                            onclick="startTraining()"
-                        >
-                            Start training
-                        </button>
-                        <button
-                            class="btn danger"
-                            id="t-stop"
-                            onclick="stopTraining()"
-                            style="display: none"
-                        >
-                            Stop
-                        </button>
-                        <span class="muted" id="t-fb"></span>
+                        <button class="btn primary" id="a-start" onclick="startArena()">Run match</button>
+                        <button class="btn danger"  id="a-stop"  onclick="stopArena()" style="display:none">Stop</button>
+                        <span class="muted" id="a-fb"></span>
                     </div>
+                    <div class="arena-log-box" id="a-log" style="margin-top:10px;display:none"></div>
                 </div>
 
-                <h2>Datasets</h2>
-                <div class="tbl-wrap" id="ds-wrap">
+                <h2>Match history</h2>
+                <div class="tbl-wrap" id="arena-hist-wrap">
                     <span class="muted">Loading…</span>
+                </div>
+
+                <div id="arena-replay-viewer" style="display:none; margin-top:1rem">
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                        <span id="ar-title" style="font-weight:600"></span>
+                        <span class="muted" id="ar-sub"></span>
+                        <button class="btn" onclick="closeArenaReplay()" style="margin-left:auto">✕</button>
+                    </div>
+                    <div class="arena-replay-grid">
+                        <div>
+                            <div id="arena-board"></div>
+                            <div class="arena-nav">
+                                <button class="btn" id="ar-prev" onclick="arenaReplayStep(-1)">‹</button>
+                                <button class="btn" id="ar-next" onclick="arenaReplayStep(1)">›</button>
+                                <span class="arena-game-sel">
+                                    Game <button class="btn" id="ar-gprev" onclick="arenaSelectGame(-1)">‹</button>
+                                    <span id="ar-gnum">1</span>/<span id="ar-gtotal">?</span>
+                                    <button class="btn" id="ar-gnext" onclick="arenaSelectGame(1)">›</button>
+                                </span>
+                                <span class="muted" id="ar-pos"></span>
+                            </div>
+                        </div>
+                        <div id="ar-movelist" style="font-family:monospace;font-size:12px;max-height:300px;overflow-y:auto;line-height:1.8"></div>
+                    </div>
                 </div>
             </section>
 
             <!-- ─── Docs ─────────────────────────────────────────────── -->
-            <section class="view" data-view="docs">
-                <div class="card" style="padding: 1.5rem">
-                    <div
-                        id="docs-content"
-                        style="color: var(--text); line-height: 1.7"
-                    >
-                        <span class="muted">Loading documentation…</span>
+            <section class="view" data-view="setups">
+                <!-- Deployed badge -->
+                <div class="card" style="padding:1rem 1.5rem;margin-bottom:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+                    <span style="font-weight:600">Active setup:</span>
+                    <span id="setup-deployed-badge" class="muted">—</span>
+                    <button class="btn" style="margin-left:auto" onclick="fetchSetups()">Reload</button>
+                </div>
+
+                <div class="setups-grid">
+                    <!-- Setup list -->
+                    <div class="card" style="padding:1rem">
+                        <div style="font-weight:600;margin-bottom:.8rem">Saved setups</div>
+                        <div id="setup-list" style="display:flex;flex-direction:column;gap:.4rem">
+                            <span class="muted" style="font-size:.85rem">Loading…</span>
+                        </div>
+                        <div style="margin-top:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
+                            <input id="setup-new-name" type="text" placeholder="(auto-name)"
+                                style="flex:1;min-width:100px;padding:.35rem .5rem;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg);color:var(--text);font-size:.85rem">
+                            <button class="btn" style="font-size:.82rem" onclick="setupCreate()">Create</button>
+                        </div>
                     </div>
+
+                    <!-- Editor -->
+                    <div class="card" id="setup-editor-card">
+                        <div id="setup-editor-empty" class="muted" style="font-size:.9rem">Select a setup to edit.</div>
+                        <div id="setup-editor" style="display:none">
+                            <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem;flex-wrap:wrap">
+                                <span id="setup-editor-title" style="font-weight:700;font-size:1.05rem"></span>
+                                <span id="setup-editor-deployed-tag" style="display:none;font-size:.78rem;background:#22c55e22;color:#16a34a;padding:.15rem .5rem;border-radius:4px;font-weight:600">DEPLOYED</span>
+                                <div style="flex-basis:100%;display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem">
+                                    <button class="btn" onclick="setupSave()">Save</button>
+                                    <button class="btn" onclick="setupSaveAs()">Save as…</button>
+                                    <button class="btn" onclick="setupDeploy()" style="background:var(--accent,#2563eb);color:#fff">Deploy</button>
+                                    <button class="btn btn-danger" onclick="setupDelete()" style="margin-left:auto">Delete</button>
+                                </div>
+                            </div>
+                            <div id="setup-fields"></div>
+                            <div id="setup-save-fb" style="font-size:.83rem;margin-top:.6rem;color:var(--text-muted)"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="view" data-view="docs">
+                <div class="docs-grid">
+                    <aside class="docs-sidebar card" id="docs-sidebar">
+                        <div class="docs-sidebar-title">Wiki</div>
+                        <nav id="docs-nav"></nav>
+                    </aside>
+                    <div class="card" style="padding: 1.5rem; min-width: 0">
+                        <div
+                            id="docs-content"
+                            style="color: var(--text); line-height: 1.7"
+                        >
+                            <span class="muted">Loading documentation…</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="view" data-view="book">
+                <div class="card" style="padding:1.5rem">
+                    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;flex-wrap:wrap">
+                        <span id="book-meta" class="muted" style="font-size:.85rem"></span>
+                        <button class="btn" onclick="fetchBook()">Reload</button>
+                        <button class="btn" onclick="bookImport()" style="margin-left:auto">Import curated (~24 lines)</button>
+                        <button class="btn btn-danger" onclick="bookClear()" style="margin-left:.5rem">Clear book</button>
+                    </div>
+                    <div style="background:var(--bg-card);border-radius:6px;padding:1rem;margin-bottom:1.2rem">
+                        <div style="font-weight:600;margin-bottom:.6rem">Add line</div>
+                        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+                            <input id="book-name"  type="text" placeholder="Name (e.g. Italian Game)"
+                                style="flex:1;min-width:160px;padding:.4rem .6rem;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg);color:var(--text)">
+                            <input id="book-moves" type="text" placeholder="Moves (e.g. e2e4 e7e5 g1f3)"
+                                style="flex:2;min-width:220px;padding:.4rem .6rem;border:1px solid var(--border,#ccc);border-radius:4px;background:var(--bg);color:var(--text)">
+                            <button class="btn" onclick="bookAddLine()">Add line</button>
+                        </div>
+                        <div id="book-fb" style="font-size:.83rem;margin-top:.4rem;color:var(--text-muted)"></div>
+                    </div>
+                    <div id="book-entries"><span class="muted">Loading…</span></div>
                 </div>
             </section>
 
@@ -1412,18 +1445,17 @@
             const state = {
                 games: [],
                 allGames: [],
-                checkpoints: [],
-                datasets: [],
-                deployed: null,
-                trainLog: [],
                 rating: null,
-                trainer: { running: false },
+                arena: { records: [], status: { running: false } },
                 botStatus: null,
                 botConfig: null,
+                setups: [],
+                setupSchema: {},
+                activeSetupName: null,
+                activeSetupData: null,
             };
 
-            let lossChart = null,
-                eloChart = null;
+            let eloChart = null;
             let _authRequired = false;
             let _replay = {
                 steps: [],
@@ -1526,56 +1558,47 @@
                     return null;
                 }
             }
-            function parseJsonl(text) {
-                if (!text) return [];
-                return text
-                    .trim()
-                    .split("\n")
-                    .filter((l) => l)
-                    .map((l) => {
-                        try {
-                            return JSON.parse(l);
-                        } catch {
-                            return null;
-                        }
-                    })
-                    .filter((x) => x);
+            async function postJSON(url, body) {
+                const h = { 'Content-Type': 'application/json' };
+                const secret = sessionStorage.getItem(SECRET_KEY);
+                if (secret) h['Authorization'] = 'Bearer ' + secret;
+                const r = await fetch(cb(url), { method: 'POST', headers: h, body: JSON.stringify(body) });
+                if (!r.ok) throw new Error(await r.text());
+                return r.json();
             }
 
             async function fetchAll() {
                 const [
-                    trainLog,
-                    deployed,
                     gamesResp,
                     allGamesResp,
                     rating,
-                    ckpts,
-                    dsets,
-                    trainer,
                     botStatus,
                     botConfig,
                 ] = await Promise.all([
-                    getText("/logs/train_log.jsonl"),
-                    getJSON("/logs/deployed.json"),
                     getJSON("/api/games?n=5"),
                     getJSON("/api/games?n=100"),
                     getJSON("/api/rating"),
-                    getJSON("/api/checkpoints"),
-                    getJSON("/api/datasets"),
-                    getJSON("/api/train/status"),
                     getJSON("/api/bot/status"),
                     getJSON("/api/bot/config"),
                 ]);
-                state.trainLog = parseJsonl(trainLog);
-                state.deployed = deployed;
                 state.games = (gamesResp && gamesResp.games) || [];
                 state.allGames = (allGamesResp && allGamesResp.games) || [];
                 state.rating = rating;
-                state.checkpoints = (ckpts && ckpts.checkpoints) || [];
-                state.datasets = (dsets && dsets.datasets) || [];
-                state.trainer = trainer || { running: false };
                 state.botStatus = botStatus;
                 state.botConfig = botConfig;
+                const arena = await getJSON("/api/arena");
+                if (arena) state.arena = arena;
+                await fetchSetups();
+            }
+
+            async function fetchSetups() {
+                const [setupsResp, schema] = await Promise.all([
+                    getJSON("/api/setups"),
+                    getJSON("/api/setups/schema"),
+                ]);
+                state.setups = (setupsResp && setupsResp.setups) || [];
+                state.setupSchema = schema || {};
+                renderSetups();
             }
 
             // ═══════════════════════════════════════════════════════════════
@@ -1588,15 +1611,10 @@
 
             function renderAll() {
                 renderStatus();
-                renderTrainerNav();
-                renderLossChart();
                 renderEloChart();
                 renderGames();
-                renderCheckpoints();
-                renderDatasets();
-                renderBaseModelSelect();
-                renderTrainerForm();
                 renderBotControls();
+                renderArena();
             }
 
             function renderStatus() {
@@ -1614,44 +1632,33 @@
                       ? `Playing vs ${bs.opponent || "?"}`
                       : "Bot active — click to pause";
 
-                if (deployed) {
-                    $("s-model").textContent = (
-                        deployed.run_name || "—"
-                    ).replace(/_/g, " ");
-                    $("s-epoch").textContent = deployed.epoch ?? "—";
-                    $("s-loss").textContent =
-                        deployed.loss_policy != null
-                            ? fmt(deployed.loss_policy)
-                            : "—";
+                const active = (state.setups || []).find((s) => s.deployed);
+                if (active) {
+                    $("s-model").textContent = active.name;
+                    const sc = (active.config && active.config.search) || {};
+                    $("s-depth").textContent = sc.max_depth ?? "—";
+                    $("s-tlim").textContent =
+                        sc.time_limit_s != null ? sc.time_limit_s + "s" : "—";
                 } else {
                     $("s-model").textContent = "— no deploy —";
+                    $("s-depth").textContent = "—";
+                    $("s-tlim").textContent = "—";
                 }
 
-                // Latest train log epoch overrides display when more recent
-                if (trainLog.length) {
-                    const last = trainLog[trainLog.length - 1];
-                    if (!deployed || last.epoch > (deployed.epoch ?? -1)) {
-                        $("s-epoch").innerHTML =
-                            `${last.epoch} <span class="sub">(latest)</span>`;
-                        $("s-loss").textContent = fmt(last.loss_policy);
-                    }
-                }
-
-                // W/L/D filtered to deployed model — use ALL games, not just recent 5
-                const allForDeployed = deployed
+                // W/L/D filtered to active setup; fallback to all games
+                const matched = active
                     ? state.allGames.filter(
-                          (g) =>
-                              (g.model && g.model === deployed.run_name) ||
-                              (!g.model && g.deployed_epoch === deployed.epoch),
+                          (g) => g.setup_name && g.setup_name === active.name,
                       )
-                    : state.allGames;
-                const w = allForDeployed.filter(
+                    : [];
+                const games_used = matched.length ? matched : state.allGames;
+                const w = games_used.filter(
                     (g) => g.result === "win",
                 ).length;
-                const l = allForDeployed.filter(
+                const l = games_used.filter(
                     (g) => g.result === "loss",
                 ).length;
-                const d = allForDeployed.filter(
+                const d = games_used.filter(
                     (g) => g.result === "draw",
                 ).length;
                 const t = w + l + d;
@@ -1667,134 +1674,6 @@
                 const last = games[games.length - 1];
                 if (!last || !last.ts) return Infinity;
                 return (Date.now() - new Date(last.ts).getTime()) / 1000;
-            }
-
-            function renderTrainerNav() {
-                const dot = $("dot-trainer");
-                const txt = $("trainer-text");
-                dot.classList.toggle("on", !!state.trainer.running);
-                if (state.trainer.running && state.trainer.run_name) {
-                    txt.textContent =
-                        "training " + state.trainer.run_name.replace(/_/g, " ");
-                } else {
-                    txt.textContent = state.trainer.running
-                        ? "training"
-                        : "trainer";
-                }
-            }
-
-            function renderLossChart() {
-                const e = state.trainLog;
-                if (!e.length) return;
-                const epochs = e.map((x) => x.epoch);
-                const losses = e.map((x) => x.loss_policy);
-                const valueLosses = e.map((x) => x.loss_value ?? null);
-                const hasValue = valueLosses.some((v) => v != null && v > 0);
-                const times = e.map((x) => x.seconds);
-                const depEpoch = state.deployed ? state.deployed.epoch : null;
-
-                if (depEpoch != null) $("dep-legend").style.display = "inline";
-
-                const plugin = {
-                    id: "depLine",
-                    afterDraw(chart) {
-                        if (depEpoch == null) return;
-                        const x = chart.scales.x.getPixelForValue(depEpoch);
-                        if (!Number.isFinite(x)) return;
-                        const ctx = chart.ctx;
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.moveTo(x, chart.chartArea.top);
-                        ctx.lineTo(x, chart.chartArea.bottom);
-                        ctx.strokeStyle = "#5DCAA5";
-                        ctx.lineWidth = 1.5;
-                        ctx.setLineDash([4, 3]);
-                        ctx.stroke();
-                        ctx.restore();
-                    },
-                };
-
-                if (!lossChart) {
-                    lossChart = new Chart($("loss-chart"), {
-                        plugins: [plugin],
-                        type: "line",
-                        data: {
-                            labels: epochs,
-                            datasets: [
-                                {
-                                    label: "Policy loss",
-                                    data: losses,
-                                    borderColor: "#534AB7",
-                                    backgroundColor: "rgba(83,74,183,0.1)",
-                                    fill: true,
-                                    tension: 0.3,
-                                    pointRadius: 2,
-                                    yAxisID: "y",
-                                },
-                                {
-                                    label: "Value loss",
-                                    data: valueLosses,
-                                    borderColor: "#e07040",
-                                    backgroundColor: "rgba(224,112,64,0.1)",
-                                    fill: false,
-                                    tension: 0.3,
-                                    pointRadius: 2,
-                                    yAxisID: "y",
-                                    hidden: !hasValue,
-                                },
-                                {
-                                    label: "s/epoch",
-                                    data: times,
-                                    borderColor: "#888780",
-                                    borderDash: [5, 5],
-                                    pointRadius: 1,
-                                    fill: false,
-                                    tension: 0.3,
-                                    yAxisID: "y1",
-                                },
-                            ],
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            interaction: { mode: "index", intersect: false },
-                            scales: {
-                                x: {
-                                    ticks: { color: "#888780" },
-                                    grid: { color: "rgba(255,255,255,0.05)" },
-                                },
-                                y: {
-                                    position: "left",
-                                    ticks: { color: "#888780" },
-                                    grid: { color: "rgba(255,255,255,0.05)" },
-                                },
-                                y1: {
-                                    position: "right",
-                                    beginAtZero: true,
-                                    ticks: { color: "#888780" },
-                                    grid: { drawOnChartArea: false },
-                                },
-                            },
-                            plugins: {
-                                legend: {
-                                    display: true,
-                                    labels: {
-                                        color: "#888780",
-                                        boxWidth: 12,
-                                        font: { size: 11 },
-                                    },
-                                },
-                            },
-                        },
-                    });
-                } else {
-                    lossChart.data.labels = epochs;
-                    lossChart.data.datasets[0].data = losses;
-                    lossChart.data.datasets[1].data = valueLosses;
-                    lossChart.data.datasets[1].hidden = !hasValue;
-                    lossChart.data.datasets[2].data = times;
-                    lossChart.update();
-                }
             }
 
             const ELO_COLORS = [
@@ -1964,205 +1843,6 @@
         <tbody>${rows}</tbody></table>`;
             }
 
-            function ckptParamCount(trunkSizes) {
-                if (!trunkSizes || !trunkSizes.length) return null;
-                const INPUT = 1280,
-                    MOVES = 1924;
-                let n = INPUT * trunkSizes[0] + trunkSizes[0];
-                for (let i = 1; i < trunkSizes.length; i++)
-                    n += trunkSizes[i - 1] * trunkSizes[i] + trunkSizes[i];
-                const last = trunkSizes[trunkSizes.length - 1];
-                const hw = Math.max(32, Math.floor(last / 4));
-                n += last * hw + hw + hw + 1 + last * MOVES + MOVES;
-                return n;
-            }
-            function fmtParams(n) {
-                if (n == null) return "";
-                return n >= 1e6
-                    ? (n / 1e6).toFixed(2) + "M"
-                    : Math.round(n / 1000) + "K";
-            }
-            function parseTrunk(s) {
-                return (s || "")
-                    .split(",")
-                    .map((x) => parseInt(x.trim(), 10))
-                    .filter((n) => Number.isFinite(n) && n > 0);
-            }
-
-            function renderCheckpoints() {
-                const list = state.checkpoints;
-                const deployed = state.deployed
-                    ? state.deployed.run_name
-                    : null;
-                if (!list.length) {
-                    $("ckpt-wrap").innerHTML =
-                        '<span class="muted">No checkpoints yet — train one below.</span>';
-                    return;
-                }
-                // games-by-name index
-                const byName = {};
-                for (const g of state.allGames) {
-                    let k = g.model || null;
-                    if (!k) {
-                        // Use deployed_epoch as identifier, or current deployed if none
-                        k =
-                            g.deployed_epoch != null
-                                ? "epoch " + g.deployed_epoch
-                                : state.deployed
-                                  ? state.deployed.run_name
-                                  : null;
-                    }
-                    if (!k) continue;
-                    byName[k] = byName[k] || { w: 0, l: 0, d: 0 };
-                    byName[k][
-                        g.result === "win"
-                            ? "w"
-                            : g.result === "loss"
-                              ? "l"
-                              : "d"
-                    ]++;
-                }
-
-                // Build lookup: checkpoint name → display name (readable)
-                const ckptNames = {};
-                for (const c of state.checkpoints) {
-                    const rn = c.run_name || c.name;
-                    if (rn)
-                        ckptNames[rn] = (c.run_name || c.name).replace(
-                            /_/g,
-                            " ",
-                        );
-                }
-
-                const rows = list
-                    .slice()
-                    .reverse()
-                    .map((c) => {
-                        const name = c.name;
-                        const isDep = name === deployed;
-                        const inProg = !!c.in_progress;
-                        const display = (c.run_name || name).replace(/_/g, " ");
-                        const trunk = parseTrunk(c.trunk_sizes || "");
-                        const arch = trunk.length ? trunk.join("→") : "—";
-                        const params = fmtParams(ckptParamCount(trunk));
-                        const epochs = c.epochs ?? "—";
-                        const loss =
-                            c.loss_policy != null ? fmt(c.loss_policy) : "—";
-                        const ds = c.dataset || "—";
-                        const date = c.completed_at
-                            ? c.completed_at.slice(0, 10)
-                            : "";
-                        const r =
-                            byName[c.run_name || name] ||
-                            byName["epoch " + (c.epochs || "")] ||
-                            byName[name];
-                        const wld = r
-                            ? `<span class="green">${r.w}</span>·<span class="red">${r.l}</span>·${r.d}`
-                            : "—";
-                        const tags = [
-                            isDep
-                                ? '<span class="badge deployed">deployed</span>'
-                                : "",
-                            inProg
-                                ? '<span class="badge training">training</span>'
-                                : "",
-                        ]
-                            .filter(Boolean)
-                            .join(" ");
-                        const deployBtn = isDep
-                            ? '<button class="btn" disabled>✓</button>'
-                            : `<button class="btn primary" onclick="deployCkpt('${name}')">Deploy</button>`;
-                        const delBtn =
-                            isDep || name === "latest"
-                                ? ""
-                                : `<button class="btn danger" onclick="deleteCkpt('${name}')">Delete</button>`;
-                        return `<tr class="${isDep ? "row-deployed" : ""}">
-            <td><span class="mono">${escapeHtml(display)}</span> ${tags}</td>
-            <td class="mono col-hide">${arch}</td>
-            <td class="muted col-hide">${params}</td>
-            <td class="col-hide">${epochs}</td>
-            <td class="mono">${loss}</td>
-            <td class="muted col-hide">${escapeHtml(ds)}</td>
-            <td>${wld}</td>
-            <td class="muted col-hide">${date}</td>
-            <td style="text-align:right;white-space:nowrap">${deployBtn} ${delBtn}</td>
-        </tr>`;
-                    })
-                    .join("");
-                $("ckpt-wrap").innerHTML = `<table>
-        <thead><tr>
-            <th>Name</th><th class="col-hide">Arch</th><th class="col-hide">Params</th><th class="col-hide">Epochs</th><th>Loss</th><th class="col-hide">Dataset</th><th>W·L·D</th><th class="col-hide">Date</th><th></th>
-        </tr></thead>
-        <tbody>${rows}</tbody></table>`;
-            }
-
-            function renderDatasets() {
-                const list = state.datasets;
-                if (!list.length) {
-                    $("ds-wrap").innerHTML =
-                        '<span class="muted">No datasets.</span>';
-                    return;
-                }
-                const rows = list
-                    .map((d) => {
-                        const recs = d.n_records
-                            ? `${(d.n_records / 1e6).toFixed(2)}M records`
-                            : "—";
-                        const ver = d.version != null ? `v${d.version}` : "—";
-                        const masked = d.version >= 2;
-                        const verBadge = `<span class="badge ${masked ? "badge-ok" : "badge-warn"}" title="${masked ? "legal-move masking" : "no legal-move masking — regenerate"}">${ver}</span>`;
-                        return `<tr>
-            <td class="mono">${escapeHtml(d.name)}</td>
-            <td class="muted">${escapeHtml(d.file || "")}</td>
-            <td class="muted">${recs}</td>
-            <td>${verBadge}</td>
-            <td style="text-align:right">
-                <button class="btn danger" onclick="deleteDataset('${d.name}')">Delete</button>
-            </td>
-        </tr>`;
-                    })
-                    .join("");
-                $("ds-wrap").innerHTML = `<table>
-        <thead><tr><th>Name</th><th>File</th><th>Size</th><th>Format</th><th></th></tr></thead>
-        <tbody>${rows}</tbody></table>`;
-
-                // Populate train form dataset select
-                const sel = $("t-dataset");
-                const prev = sel.value;
-                sel.innerHTML = list
-                    .map(
-                        (d) =>
-                            `<option value="${escapeHtml(d.file)}">${escapeHtml(d.name)}</option>`,
-                    )
-                    .join("");
-                if (prev && [...sel.options].some((o) => o.value === prev))
-                    sel.value = prev;
-            }
-
-            function renderBaseModelSelect() {
-                const sel = $("t-base");
-                const prev = sel.value;
-                sel.innerHTML =
-                    '<option value="">— fresh —</option>' +
-                    state.checkpoints
-                        .slice()
-                        .reverse()
-                        .filter((c) => c.name !== "latest")
-                        .map(
-                            (c) =>
-                                `<option value="${c.name}">${escapeHtml((c.run_name || c.name).replace(/_/g, " "))}</option>`,
-                        )
-                        .join("");
-                if (prev && [...sel.options].some((o) => o.value === prev))
-                    sel.value = prev;
-            }
-
-            function renderTrainerForm() {
-                const t = state.trainer;
-                $("t-start").disabled = t.running;
-                $("t-stop").style.display = t.running ? "" : "none";
-            }
-
             function renderBotControls() {
                 const bs = state.botStatus;
                 const bc = state.botConfig;
@@ -2173,7 +1853,13 @@
                     btn.disabled = false;
                     btn.textContent = bs.paused ? "Resume bot" : "Pause bot";
                     const quotaText = `${bs.games_today ?? 0}/${bs.daily_quota ?? 100} games today`;
-                    const tcText = bs.next_tc ? `next TC: ${bs.next_tc}` : "";
+                    const enabledTcs = bs.enabled_tcs || "";
+                    const tcCount = enabledTcs && enabledTcs !== "all"
+                        ? enabledTcs.split(",").filter(Boolean).length
+                        : null;
+                    const tcText = tcCount !== null
+                        ? `${tcCount} TC${tcCount === 1 ? "" : "s"} enabled`
+                        : "";
                     const stateText = bs.in_game
                         ? `playing vs ${escapeHtml(bs.opponent || "?")}`
                         : bs.paused
@@ -2197,7 +1883,6 @@
                         const el = $(id);
                         document.activeElement !== el && (el.value = val);
                     };
-                    setIfNotFocused("cfg-depth", bc.max_depth ?? 3);
                     setIfNotFocused("cfg-rlo", bc.rating_low ?? -400);
                     setIfNotFocused("cfg-rhi", bc.rating_high ?? 1000);
                     setIfNotFocused("cfg-quota", bc.daily_quota ?? 100);
@@ -2205,7 +1890,47 @@
                         "cfg-gap",
                         bc.min_challenge_gap_seconds ?? 60,
                     );
+                    renderTcCheckboxes(bc.enabled_tcs);
                 }
+            }
+
+            // Master list mirrors bot/main.jl TC_OPTIONS — keep in sync.
+            const TC_GROUPS = [
+                { name: "Ultra-bullet", tcs: ["15s+0", "30s+0"] },
+                { name: "Bullet",       tcs: ["1+0", "1+1", "2+1", "3+0"] },
+                { name: "Blitz",        tcs: ["3+2", "5+0", "5+3"] },
+                { name: "Rapid",        tcs: ["10+0", "10+5", "15+10"] },
+            ];
+
+            function renderTcCheckboxes(enabled) {
+                const host = $("cfg-tcs");
+                if (!host) return;
+                // Coerce to a Set of strings; if missing/invalid, treat all as enabled.
+                const enabledSet = new Set(
+                    Array.isArray(enabled) ? enabled.map(String) : [],
+                );
+                const all = TC_GROUPS.flatMap((g) => g.tcs);
+                const useAll = !Array.isArray(enabled);
+                // Don't clobber while user is interacting with a checkbox here.
+                if (host.contains(document.activeElement)) return;
+                host.innerHTML = TC_GROUPS.map((g) => `
+                    <div class="tc-group">
+                        <span class="tc-group-label">${g.name}</span>
+                        <div class="tc-group-row">
+                            ${g.tcs.map((tc) => {
+                                const checked = useAll || enabledSet.has(tc);
+                                return `<label><input type="checkbox" data-tc="${tc}" ${checked ? "checked" : ""} onchange="saveBotConfig()"/>${tc}</label>`;
+                            }).join("")}
+                        </div>
+                    </div>
+                `).join("");
+            }
+
+            function readEnabledTcs() {
+                const boxes = document.querySelectorAll("#cfg-tcs input[type=checkbox]");
+                const out = [];
+                boxes.forEach((b) => b.checked && out.push(b.dataset.tc));
+                return out;
             }
 
             // ═══════════════════════════════════════════════════════════════
@@ -2230,97 +1955,6 @@
                     },
                     body: body ? JSON.stringify(body) : undefined,
                 });
-            }
-
-            async function deployCkpt(name) {
-                if (!_ensureAuth()) return;
-                try {
-                    const r = await _post("/api/deploy", { model: name });
-                    const d = await r.json();
-                    if (!d.ok) alert("Error: " + (d.error || r.status));
-                } catch (e) {
-                    alert("Error: " + e.message);
-                }
-                await refreshAndRender();
-            }
-            async function deleteCkpt(name) {
-                if (!confirm(`Delete checkpoint "${name.replace(/_/g, " ")}"?`))
-                    return;
-                if (!_ensureAuth()) return;
-                try {
-                    const r = await fetch(
-                        `/api/checkpoints/${encodeURIComponent(name)}`,
-                        {
-                            method: "DELETE",
-                            headers: authHeader(),
-                        },
-                    );
-                    const d = await r.json();
-                    if (!d.ok) alert("Error: " + (d.error || r.status));
-                } catch (e) {
-                    alert("Error: " + e.message);
-                }
-                await refreshAndRender();
-            }
-            async function deleteDataset(name) {
-                if (!confirm(`Delete dataset "${name}"?`)) return;
-                if (!_ensureAuth()) return;
-                try {
-                    const r = await fetch(
-                        `/api/datasets/${encodeURIComponent(name)}`,
-                        {
-                            method: "DELETE",
-                            headers: authHeader(),
-                        },
-                    );
-                    const d = await r.json();
-                    if (!d.ok) alert("Error: " + (d.error || r.status));
-                } catch (e) {
-                    alert("Error: " + e.message);
-                }
-                await refreshAndRender();
-            }
-
-            async function startTraining() {
-                if (!_ensureAuth()) return;
-                const fb = $("t-fb");
-                fb.textContent = "Starting…";
-                const params = {
-                    dataset: $("t-dataset").value,
-                    base_model: $("t-base").value,
-                    epochs: parseInt($("t-epochs").value),
-                    batch_size: parseInt($("t-batch").value),
-                    lr: $("t-lr").value,
-                    lr_min: $("t-lr-min").value,
-                    weight_decay: parseFloat($("t-wd").value),
-                    value_weight: parseFloat($("t-vw").value),
-                    eval_games: parseInt($("t-eval").value),
-                    trunk_sizes: $("t-trunk").value,
-                    dropout: parseFloat($("t-drop").value),
-                };
-                try {
-                    const r = await _post("/api/train/start", params);
-                    const d = await r.json();
-                    fb.textContent = d.ok
-                        ? `Started — ${d.container_id}`
-                        : "Error: " + d.error;
-                } catch (e) {
-                    fb.textContent = "Error: " + e.message;
-                }
-                setTimeout(refreshAndRender, 1000);
-            }
-            async function stopTraining() {
-                if (!_ensureAuth()) return;
-                const fb = $("t-fb");
-                fb.textContent = "Stopping…";
-                try {
-                    const r = await _post("/api/train/stop");
-                    const d = await r.json();
-                    fb.textContent = d.ok ? "Stopped" : "Error: " + d.error;
-                } catch (e) {
-                    fb.textContent = "Error: " + e.message;
-                }
-                setTimeout(refreshAndRender, 1000);
             }
 
             async function restartBot() {
@@ -2363,11 +1997,11 @@
             async function saveBotConfig() {
                 if (!_ensureAuth()) return;
                 const config = {
-                    max_depth: parseInt($("cfg-depth").value),
                     rating_low: parseInt($("cfg-rlo").value),
                     rating_high: parseInt($("cfg-rhi").value),
                     daily_quota: parseInt($("cfg-quota").value),
                     min_challenge_gap_seconds: parseInt($("cfg-gap").value),
+                    enabled_tcs: readEnabledTcs(),
                 };
                 try {
                     const r = await _post("/api/bot/config", config);
@@ -2468,7 +2102,6 @@
                         `as ${_replay.color} · ${_replay.steps.length} traced moves`;
                     $("r-link").href = `https://lichess.org/${gameId}`;
                     $("replay-mid").style.display = "";
-                    $("replay-nn").style.display = "";
 
                     if (window.Chessboard) {
                         if (!_replay.board) {
@@ -2555,41 +2188,6 @@
                     }
                 }
 
-                const val = step.value ?? 0;
-                const fill = $("r-vfill");
-                if (val >= 0) {
-                    fill.style.left = "50%";
-                    fill.style.width = val * 50 + "%";
-                    fill.style.background = "var(--green)";
-                } else {
-                    fill.style.left = 50 + val * 50 + "%";
-                    fill.style.width = -val * 50 + "%";
-                    fill.style.background = "var(--red)";
-                }
-                $("r-vtext").textContent =
-                    (val >= 0 ? "+" : "") + Number(val).toFixed(3);
-                $("r-entropy").textContent =
-                    Number(step.entropy ?? 0).toFixed(3) + " nats";
-
-                const top5 = step.top5 || [];
-                const played = step.move || "";
-                const bars = $("r-bars");
-                if (!top5.length) {
-                    bars.innerHTML =
-                        '<span class="muted">No policy data</span>';
-                    return;
-                }
-                const maxP = top5[0].prob || 1;
-                bars.innerHTML = top5
-                    .map(({ move, prob }) => {
-                        const p = move === played;
-                        return `<div class="pol-row">
-            <span class="pol-move${p ? " played" : ""}">${move}</span>
-            <div class="pol-track"><div class="pol-fill${p ? " played" : ""}" style="width:${((prob / maxP) * 100).toFixed(1)}%"></div></div>
-            <span class="pol-prob">${(prob * 100).toFixed(1)}%</span>
-        </div>`;
-                    })
-                    .join("");
             }
             function replayPrev() {
                 if (_replay.idx > 0) {
@@ -2617,6 +2215,354 @@
             });
 
             // ═══════════════════════════════════════════════════════════════
+            // Opening Book
+            // ═══════════════════════════════════════════════════════════════
+            let _bookData = null;
+
+            // ═══════════════════════════════════════════════════════════════
+            // Setups
+            // ═══════════════════════════════════════════════════════════════
+
+            function renderSetups() {
+                const deployed = state.setups.find(s => s.deployed);
+                $('setup-deployed-badge').textContent = deployed ? deployed.name : '—';
+
+                const list = $('setup-list');
+                if (!state.setups.length) {
+                    list.innerHTML = '<span style="font-size:.85rem;color:var(--text-muted)">No setups yet.</span>';
+                    return;
+                }
+                list.innerHTML = state.setups.map(s => {
+                    const active = s.name === state.activeSetupName;
+                    return `<button data-setup-name="${escapeHtml(s.name)}"
+                        style="text-align:left;background:${active ? 'var(--accent)' : 'var(--bg-card)'};
+                               color:var(--text);border:1px solid var(--border);border-radius:5px;
+                               padding:.4rem .7rem;cursor:pointer;font-size:.85rem;width:100%;
+                               display:flex;justify-content:space-between;align-items:center;
+                               ${active ? 'outline:2px solid var(--accent);' : ''}">
+                        <span style="${active ? 'color:#fff;font-weight:600' : ''}">${escapeHtml(s.name)}</span>
+                        ${s.deployed ? '<span style="font-size:.7rem;background:var(--green);color:#fff;padding:.1rem .35rem;border-radius:3px;font-weight:600">live</span>' : ''}
+                    </button>`;
+                }).join('');
+
+                list.querySelectorAll('[data-setup-name]').forEach(btn => {
+                    btn.addEventListener('click', () => setupSelect(btn.dataset.setupName));
+                });
+            }
+
+            async function setupSelect(name) {
+                state.activeSetupName = name;
+                renderSetups();
+                try {
+                    const data = await getJSON(`/api/setups/${encodeURIComponent(name)}`);
+                    state.activeSetupData = data;
+                    renderSetupEditor(name, data);
+                } catch(e) {
+                    $('setup-editor-empty').textContent = 'Failed to load setup.';
+                }
+            }
+
+            function renderSetupEditor(name, data) {
+                $('setup-editor-empty').style.display = 'none';
+                $('setup-editor').style.display = 'block';
+                $('setup-editor-title').textContent = name;
+                const deployed = state.setups.find(s => s.name === name && s.deployed);
+                $('setup-editor-deployed-tag').style.display = deployed ? 'inline' : 'none';
+
+                const schema = state.setupSchema;
+                const sections = {};
+                for (const [key, def] of Object.entries(schema)) {
+                    const [sec] = key.split('.');
+                    if (!sections[sec]) sections[sec] = [];
+                    sections[sec].push([key, def]);
+                }
+
+                const SECTION_TITLES = {
+                    search:   'Search',
+                    eval:     'Evaluation',
+                    ordering: 'Move ordering',
+                    book:     'Opening book',
+                };
+                const SECTION_BLURB = {
+                    search:   'Alpha-beta tree search and pruning techniques.',
+                    eval:     'Static evaluation bonuses (centipawns) on top of the PeSTO PSQT.',
+                    ordering: 'Heuristics that order moves at each node — better order = more cutoffs.',
+                    book:     'Opening book consulted before search.',
+                };
+                const prettify = (s) => s.replace(/_cp$/, ' (cp)')
+                    .replace(/_s$/, ' (s)')
+                    .replace(/_/g, ' ')
+                    .replace(/\b(\w)/, c => c.toUpperCase())
+                    .replace(/\b(lmr|tt|cp|R)\b/gi, m => m.toUpperCase());
+
+                // Server normalises on save, but old setups may still have nulls.
+                // Fall through schema default → schema min as last resort.
+                const SCHEMA_DEFAULTS = {
+                    'search.max_depth': 6, 'search.time_limit_s': 0.5,
+                    'search.tt_size_log2': 20, 'search.qsearch': true,
+                    'search.delta_pruning_margin_cp': 200, 'search.check_extension': true,
+                    'search.null_move_enabled': true, 'search.null_move_R': 2,
+                    'search.null_move_min_depth': 3, 'search.lmr_enabled': true,
+                    'search.lmr_min_depth': 3, 'search.lmr_min_move_idx': 4,
+                    'search.lmr_reduction': 1, 'search.aspiration_window_cp': 50,
+                    'eval.bishop_pair_cp': 40, 'eval.rook_open_cp': 25, 'eval.rook_semi_cp': 12,
+                    'ordering.killers': true, 'ordering.history': true,
+                    'book.enabled': true, 'book.max_ply': 16,
+                };
+                const getValue = (key, d) => {
+                    const parts = key.split('.');
+                    let v = d;
+                    for (const p of parts) v = v && v[p];
+                    return v ?? SCHEMA_DEFAULTS[key];
+                };
+
+                const fields = $('setup-fields');
+                fields.innerHTML = Object.entries(sections).map(([sec, pairs]) => `
+                    <div style="margin-bottom:1.6rem">
+                        <div style="margin-bottom:.9rem;padding-bottom:.4rem;border-bottom:1px solid var(--border)">
+                            <div style="font-weight:700;font-size:1rem;color:var(--text)">${SECTION_TITLES[sec] || sec}</div>
+                            ${SECTION_BLURB[sec] ? `<div style="font-size:.78rem;color:var(--text-muted);margin-top:.15rem">${SECTION_BLURB[sec]}</div>` : ''}
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr;gap:.85rem">
+                        ${pairs.map(([key, def]) => {
+                            const val = getValue(key, data);
+                            const inputId = 'sf-' + key.replace(/\./g, '-');
+                            const fieldName = prettify(key.split('.').slice(1).join('.'));
+                            const docLink = def.doc ? `<a href="#" data-doc="${def.doc}"
+                                style="font-size:.72rem;margin-left:.45rem;color:var(--accent);text-decoration:none;opacity:.7" title="Open docs">↗</a>` : '';
+                            let input;
+                            if (def.type === 'bool') {
+                                input = `<label style="display:flex;align-items:center;gap:.5rem;cursor:pointer">
+                                    <input type="checkbox" id="${inputId}" ${val ? 'checked' : ''}
+                                        style="width:1rem;height:1rem;cursor:pointer">
+                                    <span style="font-size:.82rem;color:var(--text-muted)">${val ? 'enabled' : 'disabled'}</span>
+                                </label>`;
+                            } else {
+                                const hint = def.min != null ? `${def.min} – ${def.max}` : '';
+                                const unit = key.endsWith('_cp') ? 'cp' : key.endsWith('_s') ? 's' : '';
+                                input = `<input type="number" id="${inputId}" value="${val ?? ''}"
+                                    min="${def.min ?? ''}" max="${def.max ?? ''}" step="${def.step ?? 1}"
+                                    class="sf-num">
+                                ${unit ? `<span style="font-size:.78rem;color:var(--text-muted)">${unit}</span>` : ''}
+                                ${hint ? `<span style="font-size:.74rem;color:var(--text-muted)">range ${hint}</span>` : ''}`;
+                            }
+                            return `<div class="sf-row">
+                                <div>
+                                    <span style="font-size:.9rem;font-weight:600;color:var(--text)">${fieldName}</span>${docLink}
+                                    ${def.description ? `<div style="font-size:.78rem;color:var(--text-muted);margin-top:.18rem;line-height:1.45">${def.description}</div>` : ''}
+                                </div>
+                                <div class="sf-input">${input}</div>
+                            </div>`;
+                        }).join('')}
+                        </div>
+                    </div>`).join('');
+
+                // Wire checkbox labels to update their text
+                fields.querySelectorAll('input[type=checkbox]').forEach(cb => {
+                    cb.addEventListener('change', () => {
+                        const lbl = cb.parentElement.querySelector('span');
+                        if (lbl) lbl.textContent = cb.checked ? 'enabled' : 'disabled';
+                    });
+                });
+                // Wire docs links
+                fields.querySelectorAll('[data-doc]').forEach(a => {
+                    a.addEventListener('click', e => { e.preventDefault(); showDoc(a.dataset.doc); });
+                });
+            }
+
+            function _readEditorValues(data, schema) {
+                const out = JSON.parse(JSON.stringify(data));
+                const setValue = (obj, parts, val) => {
+                    for (let i = 0; i < parts.length - 1; i++) { obj = obj[parts[i]] = obj[parts[i]] || {}; }
+                    obj[parts[parts.length-1]] = val;
+                };
+                for (const [key, def] of Object.entries(schema)) {
+                    const el = document.getElementById('sf-' + key.replace(/\./g, '-'));
+                    if (!el) continue;
+                    const parts = key.split('.');
+                    let val;
+                    if (def.type === 'bool') {
+                        val = el.checked;
+                    } else if (def.type === 'int') {
+                        val = parseInt(el.value);
+                        if (isNaN(val)) val = def.min ?? 0;
+                    } else {
+                        val = parseFloat(el.value);
+                        if (isNaN(val)) val = def.min ?? 0.0;
+                    }
+                    setValue(out, parts, val);
+                }
+                return out;
+            }
+
+            async function setupSave() {
+                if (!state.activeSetupName) return;
+                const data = _readEditorValues(state.activeSetupData, state.setupSchema);
+                try {
+                    await postJSON(`/api/setups/${encodeURIComponent(state.activeSetupName)}`, data);
+                    state.activeSetupData = data;
+                    $('setup-save-fb').textContent = 'Saved ✓';
+                    setTimeout(() => $('setup-save-fb').textContent = '', 2000);
+                } catch(e) { $('setup-save-fb').textContent = 'Save failed: ' + e; }
+            }
+
+            async function setupSaveAs() {
+                const newName = prompt('Save as (new setup name):');
+                if (!newName) return;
+                const data = _readEditorValues(state.activeSetupData || {}, state.setupSchema);
+                data.name = newName;
+                try {
+                    await postJSON('/api/setups', data);
+                    await fetchSetups();
+                    setupSelect(newName);
+                } catch(e) { alert('Save failed: ' + e); }
+            }
+
+            async function setupCreate() {
+                const customName = $('setup-new-name').value.trim();
+                try {
+                    // Duplicate from active or use defaults; server auto-names if blank
+                    const base = state.activeSetupData ? JSON.parse(JSON.stringify(state.activeSetupData)) : {};
+                    if (customName) base.name = customName; else delete base.name;
+                    const r = await postJSON('/api/setups', base);
+                    $('setup-new-name').value = '';
+                    await fetchSetups();
+                    if (r && r.name) setupSelect(r.name);
+                } catch(e) { alert('Create failed: ' + e); }
+            }
+
+            async function setupDeploy() {
+                if (!state.activeSetupName) return;
+                const data = _readEditorValues(state.activeSetupData, state.setupSchema);
+                // Save first then deploy
+                try {
+                    await postJSON(`/api/setups/${encodeURIComponent(state.activeSetupName)}`, data);
+                    const r = await postJSON(`/api/setups/${encodeURIComponent(state.activeSetupName)}/deploy`, {});
+                    if (r.warn) alert('Deployed with warning: ' + r.warn);
+                    await fetchSetups();
+                } catch(e) { alert('Deploy failed: ' + e); }
+            }
+
+            async function setupDelete() {
+                if (!state.activeSetupName) return;
+                if (!confirm(`Delete setup "${state.activeSetupName}"?`)) return;
+                try {
+                    await fetch(`/api/setups/${encodeURIComponent(state.activeSetupName)}`, {
+                        method: 'DELETE', headers: authHeader()
+                    });
+                    state.activeSetupName = null;
+                    state.activeSetupData = null;
+                    $('setup-editor').style.display = 'none';
+                    $('setup-editor-empty').style.display = 'block';
+                    $('setup-editor-empty').textContent = 'Select a setup to edit.';
+                    await fetchSetups();
+                } catch(e) { alert('Delete failed: ' + e); }
+            }
+
+            async function showDoc(ref) {
+                showView('docs');
+                await loadDocs();
+                // ref is "search.md#anchor" — scroll to that anchor
+                const anchor = ref && ref.includes('#') ? ref.split('#')[1] : null;
+                if (anchor) {
+                    setTimeout(() => {
+                        const el = document.getElementById(anchor);
+                        if (el) el.scrollIntoView({behavior:'smooth', block:'start'});
+                    }, 50);
+                }
+            }
+
+            async function fetchBook() {
+                try {
+                    const d = await getJSON('/api/book');
+                    _bookData = d;
+                    renderBook(d);
+                } catch (e) {
+                    $('book-entries').innerHTML = `<span class="muted">Bot unreachable.</span>`;
+                }
+            }
+
+            function renderBook(d) {
+                $('book-meta').textContent = `${d.count ?? 0} position${(d.count ?? 0) === 1 ? '' : 's'}`;
+                if (!d.entries || !d.entries.length) {
+                    $('book-entries').innerHTML = '<span class="muted">Book is empty. Import curated lines or add your own.</span>';
+                    return;
+                }
+                // Group by label
+                const groups = {};
+                for (const entry of d.entries) {
+                    for (const m of entry.moves) {
+                        const lbl = m.label || '(unlabelled)';
+                        if (!groups[lbl]) groups[lbl] = [];
+                        groups[lbl].push({ hash: entry.hash, move: m.move });
+                    }
+                }
+                const labels = Object.keys(groups).sort();
+                $('book-entries').innerHTML = labels.map(lbl => `
+                    <details open style="margin-bottom:.7rem">
+                        <summary style="cursor:pointer;font-weight:600;padding:.3rem 0">
+                            ${escapeHtml(lbl)} <span class="muted">(${groups[lbl].length} position${groups[lbl].length === 1 ? '' : 's'})</span>
+                        </summary>
+                        <table class="tbl" style="margin-top:.4rem">
+                            <tbody>${groups[lbl].map(row => `
+                                <tr>
+                                    <td class="mono" style="font-size:.8rem;color:var(--text-muted)">${row.hash.slice(-8)}</td>
+                                    <td class="mono"><strong>${escapeHtml(row.move)}</strong></td>
+                                    <td style="text-align:right">
+                                        <button class="btn btn-danger" style="padding:2px 8px;font-size:.8rem"
+                                            onclick="bookDelete('${escapeHtml(row.hash)}','${escapeHtml(row.move)}')">×</button>
+                                    </td>
+                                </tr>`).join('')}
+                            </tbody>
+                        </table>
+                    </details>`).join('');
+            }
+
+            async function bookAddLine() {
+                const name  = $('book-name').value.trim();
+                const moves = $('book-moves').value.trim();
+                if (!name || !moves) { $('book-fb').textContent = 'Name and moves are required.'; return; }
+                $('book-fb').textContent = 'Adding…';
+                try {
+                    await postJSON('/api/book/line', { name, moves });
+                    $('book-fb').textContent = 'Added.';
+                    $('book-name').value = ''; $('book-moves').value = '';
+                    await fetchBook();
+                } catch (e) {
+                    $('book-fb').textContent = `Error: ${e.message}`;
+                }
+            }
+
+            async function bookDelete(hash, move) {
+                try {
+                    await postJSON('/api/book/entry/delete', { hash, move });
+                    await fetchBook();
+                } catch (e) {
+                    alert('Delete failed: ' + e.message);
+                }
+            }
+
+            async function bookImport() {
+                if (!confirm('Merge ~24 curated opening lines into the book?')) return;
+                try {
+                    const r = await postJSON('/api/book/import', {});
+                    await fetchBook();
+                } catch (e) {
+                    alert('Import failed: ' + e.message);
+                }
+            }
+
+            async function bookClear() {
+                if (!confirm('Clear the entire opening book?')) return;
+                try {
+                    await postJSON('/api/book/clear', {});
+                    await fetchBook();
+                } catch (e) {
+                    alert('Clear failed: ' + e.message);
+                }
+            }
+
+            // ═══════════════════════════════════════════════════════════════
             // View switching
             // ═══════════════════════════════════════════════════════════════
             function showView(name) {
@@ -2631,35 +2577,146 @@
                     .forEach((a) =>
                         a.classList.toggle("active", a.dataset.view === name),
                     );
-                history.replaceState(null, "", "#" + name);
-                if (name === "docs") loadDocs();
+                // Don't clobber a #docs/<page>[#anchor] hash if we're entering docs.
+                if (!(name === "docs" && location.hash.startsWith("#docs/"))) {
+                    history.replaceState(null, "", "#" + name);
+                }
+                if (name === "docs")   loadDocs();
+                if (name === "book")   fetchBook();
+                if (name === "setups") fetchSetups();
             }
+
+            // Wiki pages, in display order. Each entry: [filename, label]
+            const DOCS_PAGES = [
+                ["overview.md",            "Overview"],
+                ["search.md",              "Search"],
+                ["move-ordering.md",       "Move ordering"],
+                ["eval.md",                "Evaluation"],
+                ["transposition-table.md", "Transposition table"],
+                ["book.md",                "Opening book"],
+                ["model.md",               "Neural model"],
+                ["training.md",            "Training"],
+                ["setups.md",              "Setups"],
+                ["bot.md",                 "Bot"],
+                ["dashboard.md",           "Dashboard"],
+                ["roadmap.md",             "Roadmap"],
+            ];
 
             let _docsLoaded = false;
             let _showdownConverter = null;
             async function loadDocs() {
                 if (_docsLoaded) return;
                 const el = $("docs-content");
+                const navEl = $("docs-nav");
                 try {
-                    const md = await getText("/docs/engine.md");
-                    if (!md) {
-                        el.innerHTML =
-                            '<span class="muted">Failed to load documentation.</span>';
-                        return;
-                    }
+                    const parts = await Promise.all(
+                        DOCS_PAGES.map(p => getText("/docs/" + p[0]))
+                    );
                     if (!_showdownConverter)
                         _showdownConverter = new showdown.Converter({
                             tables: true,
                             strikethrough: true,
                         });
-                    el.innerHTML = _showdownConverter.makeHtml(md);
+
+                    // Render each page into its own <section> with a stable id.
+                    const sections = [];
+                    DOCS_PAGES.forEach(([fname, label], i) => {
+                        const md = parts[i];
+                        if (!md) return;
+                        const slug = fname.replace(/\.md$/, "");
+                        const html = _showdownConverter.makeHtml(md);
+                        sections.push(
+                            `<section class="doc-page" id="doc-${slug}" data-doc-page="${slug}">${html}</section>`
+                        );
+                    });
+                    el.innerHTML = sections.join("\n");
+
+                    // Build the sidebar: page link + nested h2 anchors.
+                    const navParts = [];
+                    DOCS_PAGES.forEach(([fname, label]) => {
+                        const slug = fname.replace(/\.md$/, "");
+                        const sec = el.querySelector(`#doc-${slug}`);
+                        navParts.push(
+                            `<a class="docs-page" href="#doc/${slug}" data-page="${slug}">${escapeHtml(label)}</a>`
+                        );
+                        if (!sec) return;
+                        // List h2s with explicit ids (from {#anchor}) so they're stable links.
+                        sec.querySelectorAll("h2[id], h3[id]").forEach(h => {
+                            if (!h.id) return;
+                            const txt = h.textContent.trim();
+                            navParts.push(
+                                `<a class="docs-anchor" href="#doc/${slug}#${h.id}" data-page="${slug}" data-anchor="${h.id}">${escapeHtml(txt)}</a>`
+                            );
+                        });
+                    });
+                    navEl.innerHTML = navParts.join("");
+
+                    // Sidebar click handlers.
+                    navEl.querySelectorAll("a[data-page]").forEach(a => {
+                        a.addEventListener("click", e => {
+                            e.preventDefault();
+                            const page = a.dataset.page;
+                            const anchor = a.dataset.anchor;
+                            const target = anchor
+                                ? document.getElementById(anchor)
+                                : document.getElementById("doc-" + page);
+                            if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+                            history.replaceState(
+                                null, "",
+                                "#docs/" + page + (anchor ? "#" + anchor : "")
+                            );
+                            _setActiveDocLink(page, anchor);
+                        });
+                    });
+
+                    // Spy on scroll to highlight current page.
+                    const observer = new IntersectionObserver(entries => {
+                        for (const ent of entries) {
+                            if (ent.isIntersecting) {
+                                const slug = ent.target.dataset.docPage;
+                                _setActiveDocLink(slug, null);
+                            }
+                        }
+                    }, { rootMargin: "0px 0px -70% 0px", threshold: 0 });
+                    el.querySelectorAll("section.doc-page").forEach(s => observer.observe(s));
+
                     _docsLoaded = true;
+
+                    // If a #docs/<page>[#anchor] is in the URL, scroll there now.
+                    const hash = location.hash.replace(/^#/, "");
+                    if (hash.startsWith("docs/")) {
+                        const rest = hash.slice("docs/".length);
+                        const [page, anchor] = rest.split("#");
+                        const target = anchor
+                            ? document.getElementById(anchor)
+                            : document.getElementById("doc-" + page);
+                        if (target) setTimeout(() => target.scrollIntoView({ block: "start" }), 30);
+                        _setActiveDocLink(page, anchor);
+                    } else {
+                        _setActiveDocLink("overview", null);
+                    }
                 } catch (e) {
                     el.innerHTML =
                         '<span class="muted">Error loading documentation: ' +
                         escapeHtml(e.message) +
                         "</span>";
                 }
+            }
+
+            function _setActiveDocLink(page, anchor) {
+                const navEl = $("docs-nav");
+                if (!navEl) return;
+                navEl.querySelectorAll("a").forEach(a => {
+                    const samePage = a.dataset.page === page;
+                    if (a.classList.contains("docs-page")) {
+                        a.classList.toggle("active", samePage && !anchor);
+                    } else {
+                        a.classList.toggle(
+                            "active",
+                            samePage && a.dataset.anchor === anchor
+                        );
+                    }
+                });
             }
             document.querySelectorAll(".nav-link").forEach((a) => {
                 a.addEventListener("click", (e) => {
@@ -2668,7 +2725,7 @@
                 });
             });
             window.addEventListener("popstate", () =>
-                showView(location.hash.slice(1) || "bot"),
+                showView((location.hash.slice(1) || "bot").split("/")[0]),
             );
 
             document
@@ -2684,6 +2741,194 @@
             async function refreshAndRender() {
                 await fetchAll();
                 renderAll();
+            }
+
+            // ═══════════════════════════════════════════════════════════════
+            // Arena
+            // ═══════════════════════════════════════════════════════════════
+            let _arenaLogTimer = null;
+            const _ar = {
+                board: null, games: [], gameIdx: 0,
+                chess: null, moves: [], moveIdx: 0,
+            };
+
+            function renderArena() {
+                const { records, status } = state.arena;
+                // Run/stop button state
+                $("a-start").style.display = status.running ? "none" : "";
+                $("a-stop").style.display  = status.running ? "" : "none";
+                $("a-fb").textContent = status.running ? "Match running…" : "";
+                if (status.running && !_arenaLogTimer) {
+                    $("a-log").style.display = "";
+                    _arenaLogTimer = setInterval(fetchArenaLogs, 3000);
+                } else if (!status.running && _arenaLogTimer) {
+                    clearInterval(_arenaLogTimer); _arenaLogTimer = null;
+                }
+
+                // History table
+                const wrap = $("arena-hist-wrap");
+                if (!records || !records.length) {
+                    wrap.innerHTML = '<span class="muted">No matches yet.</span>';
+                    return;
+                }
+                const sorted = [...records].reverse();
+                wrap.innerHTML = `<table class="tbl"><thead><tr>
+                    <th>Date</th><th>Model</th><th>SF Elo</th><th>Games</th>
+                    <th>W / D / L</th><th>Score</th><th>Cassandra Elo</th><th></th>
+                </tr></thead><tbody>${sorted.map((r, i) => {
+                    const elo = r.cassandra_elo != null
+                        ? `${Math.round(r.cassandra_elo)} <span class="muted">±${Math.round(r.elo_err ?? 0)}</span>`
+                        : '<span class="muted">N/A</span>';
+                    return `<tr>
+                        <td class="mono">${r.date}</td>
+                        <td class="mono">${escapeHtml(r.model)}</td>
+                        <td>${r.opponent_elo}</td>
+                        <td>${r.games}</td>
+                        <td>${r.wins}/${r.draws}/${r.losses}</td>
+                        <td>${(r.score * 100).toFixed(1)}%</td>
+                        <td>${elo}</td>
+                        <td>${r.pgn ? `<button class="btn" onclick="openArenaReplay(${records.length - 1 - i})">▶ Replay</button>` : ''}</td>
+                    </tr>`;
+                }).join('')}</tbody></table>`;
+            }
+
+            async function fetchArenaLogs() {
+                const r = await getJSON("/api/arena/logs?n=60");
+                if (!r) return;
+                const box = $("a-log");
+                box.textContent = (r.lines || []).join("\n");
+                box.scrollTop = box.scrollHeight;
+                if (!r.running) { clearInterval(_arenaLogTimer); _arenaLogTimer = null; }
+            }
+
+            async function startArena() {
+                if (!_ensureAuth()) return;
+                const params = {
+                    stockfish_elo: parseInt($("a-elo").value) || 1500,
+                    games:         parseInt($("a-games").value) || 100,
+                    move_time:     parseFloat($("a-time").value) || 1.0,
+                };
+                $("a-fb").textContent = "Starting…";
+                try {
+                    const r = await _post("/api/arena/run", params);
+                    const d = await r.json();
+                    if (d.ok) {
+                        $("a-fb").textContent = "Match running…";
+                        $("a-start").style.display = "none";
+                        $("a-stop").style.display = "";
+                        $("a-log").style.display = "";
+                        _arenaLogTimer = setInterval(fetchArenaLogs, 3000);
+                    } else {
+                        $("a-fb").textContent = "Error: " + (d.error || r.status);
+                    }
+                } catch (e) { $("a-fb").textContent = "Error: " + e.message; }
+            }
+
+            async function stopArena() {
+                if (!_ensureAuth()) return;
+                try { await _post("/api/arena/stop", {}); } catch {}
+                $("a-stop").style.display = "none";
+                $("a-start").style.display = "";
+                $("a-fb").textContent = "Stopped.";
+                clearInterval(_arenaLogTimer); _arenaLogTimer = null;
+            }
+
+            // ── PGN replay ────────────────────────────────────────────────
+            function closeArenaReplay() {
+                $("arena-replay-viewer").style.display = "none";
+                _ar.games = []; _ar.gameIdx = 0; _ar.moves = []; _ar.moveIdx = 0;
+            }
+
+            async function openArenaReplay(recordIdx) {
+                const r = state.arena.records[recordIdx];
+                if (!r || !r.pgn) return;
+                const text = await getText(`/logs/arena_pgn/${r.pgn}`);
+                if (!text) return;
+                // Split PGN into individual games
+                _ar.games = text.trim().split(/\n\n(?=\[)/).filter(Boolean);
+                _ar.gameIdx = 0;
+                _ar.moves = []; _ar.moveIdx = 0;
+                $("ar-title").textContent = `${r.opponent_elo} Elo · ${r.date}`;
+                $("ar-gtotal").textContent = _ar.games.length;
+                $("arena-replay-viewer").style.display = "";
+                $("arena-replay-viewer").scrollIntoView({ behavior: "smooth", block: "nearest" });
+                arenaLoadGame();
+            }
+
+            function arenaLoadGame() {
+                const pgn = _ar.games[_ar.gameIdx];
+                if (!pgn || !window.Chess) return;
+                const chess = new Chess();
+                chess.load_pgn(pgn);
+                const history = chess.history({ verbose: true });
+                // Reconstruct from start
+                const startChess = new Chess();
+                _ar.moves = [{ fen: startChess.fen(), san: null }];
+                const replayChess = new Chess();
+                for (const m of history) {
+                    replayChess.move(m);
+                    _ar.moves.push({ fen: replayChess.fen(), san: m.san });
+                }
+                _ar.moveIdx = 0;
+                // Parse who is cassandra
+                const whiteMatch = pgn.match(/\[White "([^"]+)"/);
+                const orientation = (whiteMatch && whiteMatch[1].toLowerCase().includes("cassandra")) ? "white" : "black";
+                $("ar-gnum").textContent = _ar.gameIdx + 1;
+                $("ar-sub").textContent = `${_ar.moves.length - 1} moves`;
+
+                // Build move list
+                const moveListEl = $("ar-movelist");
+                const tokens = [];
+                for (let i = 1; i < _ar.moves.length; i++) {
+                    const moveNum = Math.ceil(i / 2);
+                    if (i % 2 === 1) tokens.push(`<span class="muted">${moveNum}.</span>`);
+                    tokens.push(`<span id="arm-${i}" onclick="arenaJumpTo(${i})" style="cursor:pointer;padding:0 2px">${escapeHtml(_ar.moves[i].san)}</span>`);
+                }
+                moveListEl.innerHTML = tokens.join(" ");
+
+                if (window.Chessboard) {
+                    if (!_ar.board) {
+                        _ar.board = Chessboard("arena-board", {
+                            pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+                            orientation,
+                            position: "start",
+                        });
+                    } else {
+                        _ar.board.orientation(orientation);
+                    }
+                    setTimeout(() => { _ar.board.resize(); arenaRenderStep(); }, 0);
+                } else {
+                    arenaRenderStep();
+                }
+            }
+
+            function arenaRenderStep() {
+                const { moves, moveIdx } = _ar;
+                $("ar-prev").disabled = moveIdx <= 0;
+                $("ar-next").disabled = moveIdx >= moves.length - 1;
+                $("ar-pos").textContent = moveIdx === 0 ? "Start" : `Move ${moveIdx}/${moves.length - 1}`;
+                if (_ar.board) _ar.board.position(moves[moveIdx].fen, false);
+                // Highlight active move in list
+                document.querySelectorAll("[id^='arm-']").forEach(el => el.style.background = "");
+                if (moveIdx > 0) {
+                    const el = $(`arm-${moveIdx}`);
+                    if (el) { el.style.background = "var(--border)"; el.scrollIntoView({ block: "nearest" }); }
+                }
+            }
+
+            function arenaReplayStep(dir) {
+                _ar.moveIdx = Math.max(0, Math.min(_ar.moves.length - 1, _ar.moveIdx + dir));
+                arenaRenderStep();
+            }
+
+            function arenaJumpTo(idx) {
+                _ar.moveIdx = idx;
+                arenaRenderStep();
+            }
+
+            function arenaSelectGame(dir) {
+                _ar.gameIdx = Math.max(0, Math.min(_ar.games.length - 1, _ar.gameIdx + dir));
+                arenaLoadGame();
             }
 
             (async function init() {

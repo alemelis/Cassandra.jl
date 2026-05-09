@@ -70,10 +70,11 @@ import Bobby
         reader = Cassandra.DatasetReader(bin_path)
         @test reader.n_records == n
 
-        tensors, values, policies = Cassandra.make_batch(reader, [1])
+        tensors, values, policies, masks, weights = Cassandra.make_batch(reader, [1])
         @test size(tensors) == (Cassandra.INPUT_SIZE, 1)
-        @test values[1] == 0f0
+        @test values[1] == 1f0   # first solution move is our move (+1.0)
         @test 1 <= policies[1] <= Cassandra.N_MOVES
+        @test 0f0 < weights[1] <= 1f0
 
         rm(csv_path); rm(bin_path); rm(bin_path * ".json")
     end

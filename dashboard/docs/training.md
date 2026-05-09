@@ -1,55 +1,168 @@
-# Training Strategy
+# Training
 
-Cassandra is trained in two stages: supervised imitation from puzzles, followed by self-play reinforcement.
+Cassandra trains its dual-headed network from labelled positions. The pipeline
+is intentionally minimal — flat-binary records on disk, a streaming reader,
+and one Flux training loop with two losses.
 
-## Stage 1 — Puzzle imitation
+Code: `src/Training/{DataPipeline,Imitation,PGNData,Trainer,SelfPlay}.jl`,
+runner at `scripts/train.jl`.
 
-**Data source**: [Lichess puzzle database](https://database.lichess.org/#puzzles) (~4 M tactics puzzles, each with a known best continuation).
+---
 
-**Pipeline**:
+## The data pipeline
 
-1. `prepare_puzzles(csv, bin)` — reads the raw CSV, applies the first puzzle move to reach the *response position*, converts the board to the 773-feature input tensor, and stores `(tensor, value=0, policy_idx)` records in a compact binary file.
-2. `train_epoch!(model, opt, dataset)` — streams the binary file in random mini-batches, computes a combined loss, and updates weights with Adam.
+A *record* is a single (position, value, policy-target, legal-mask, weight).
+Records are packed back-to-back in a `.bin` file with a small header
+(`DatasetWriter` / `DatasetReader`). One epoch = one full pass.
 
-**Loss function**:
+| Field | Type | What |
+|-------|------|------|
+| tensor | `Float32 × 1280` | Flattened `(8,8,20)` board planes |
+| value | `Float32` | Target in `[-1, 1]` from side-to-move's perspective |
+| policy_idx | `Int32` | Index into the 1924-move table; the move to imitate |
+| legal_mask | `Float32 × 1924` | 0 for legal moves, `-1e9` for illegal — added to logits before softmax |
+| weight | `Float32` | Per-record loss weight in `[0, 1]` |
+
+Why flat binary: it streams from disk at full I/O bandwidth and is trivially
+shardable. No serialisation overhead.
+
+---
+
+## Two data sources
+
+### Lichess puzzles → `prepare_puzzles`
+
+Each puzzle is a tactic with a known forcing solution. We walk the solution:
+
+- **Our moves** (the puzzle's intended best move at each turn) → `value = +1`,
+  policy target = the move.
+- **Opponent's forced replies** → `value = -1`, policy target = the move.
+
+The first move of the solution is the *setup* (the move that creates the
+puzzle); we apply it before recording anything. Skipped if any move fails to
+parse, the position is illegal, or the policy index isn't in `UCI2IDX`.
+
+Each record's weight uses a sigmoid centred on rating 1200, multiplied by a
+popularity factor:
 
 ```
-L = α · CE(policy_logits, target_move) + (1 - α) · MSE(value, target_value)
+rating_w = sigmoid((rating − 1200) / 400)
+pop_w    = clamp((popularity + 100) / 200, 0.05, 1)
+weight   = clamp(rating_w · pop_w, 0.02, 1)
 ```
 
-- Policy target: the known best reply (one-hot cross-entropy).
-- Value target: `0.0` for all puzzle positions (outcome unknown at the response ply).
-- `α = 0.9` weights policy learning more heavily in Stage 1, since value supervision is weak.
+So a 2200-rated, popular puzzle counts ~10× more than a 600-rated, unpopular
+one. Prevents trivial puzzles from dominating the gradient.
 
-**Why puzzles first?**  
-Puzzle positions are densely informative: every record has a definitively correct move, which bootstraps the policy head quickly. Cold-starting from random play would require orders of magnitude more games to reach the same move-ordering quality.
+### Lichess PGN games → `prepare_pgn`
 
-## Stage 2 — Self-play (roadmap)
+For each game (filtered to ≥ some Elo), we walk the move list and record one
+position-per-move. Value target = the eventual game outcome from the
+side-to-move's perspective (`+1` if they won, `-1` if they lost, `0` if
+draw). Policy target = the move actually played.
 
-Self-play uses the current model to generate full games, then trains on the outcomes.
+Trades: less precise per-record (game outcome ≠ position eval) but vastly
+more data (~10 M positions per monthly dump). Best used as the **value-head
+training signal** — the policy loss benefits less since human players are
+noisy.
 
-**Planned flow**:
+---
 
-1. `play_game(model_a, model_b)` — plays one game, records `(board, move, result)` triples.
-2. Value targets are set to `+1 / -1 / 0` depending on game outcome.
-3. Policy targets come from the move actually played (or MCTS visit counts in a future version).
-4. Mix self-play records with puzzle records to avoid catastrophic forgetting of tactical patterns.
+## The training loop
 
-**Arena evaluation**: after each self-play epoch, `evaluate(model_new, model_old, n)` plays `n` games and accepts the new model only if it wins ≥ 55 % (configurable via `WIN_THRESHOLD`).
+`train_epoch!(model, opt_state, dataset_path; ...)` does one pass:
 
-## Hyperparameters
+```julia
+for (tensors, values, policy_idxs, legal_mask, weights) in batch_iterator(...)
+    targets = onehotbatch(policy_idxs, 1:1924)
 
-| Variable | Default | Meaning |
-|----------|---------|---------|
-| `EPOCHS` | `50` | training epochs per run |
-| `BATCH_SIZE` | `2048` | records per mini-batch |
-| `LR` | `1e-3` | Adam learning rate |
-| `EVAL_GAMES` | `0` | arena games after training (0 = skip) |
-| `WIN_THRESHOLD` | `0.55` | acceptance threshold for arena eval |
+    value_preds, logits = model(tensors)
 
-## Deployment workflow
+    # Weighted MSE for value head
+    per_lv = (vec(value_preds) .- values).^2
+    lv = sum(weights .* per_lv) / sum(weights)
 
-1. Training saves a checkpoint as `checkpoints/<run_name>.jld2` at the end of each run.
-2. The dashboard **Deploy** panel lists available checkpoints; select one and click *Deploy*.
-3. `deployed.jld2` is updated and `deployed.json` records the model name + epoch.
-4. The bot receives a `POST /reload` signal and swaps the model in-memory after its current game finishes — no restart needed.
+    # Mask illegal moves before softmax, then weighted CE
+    masked_logits = logits .+ legal_mask
+    per_lp = -sum(targets .* logsoftmax(masked_logits; dims=1); dims=1)
+    lp = sum(weights .* per_lp) / sum(weights)
+
+    total = value_weight*lv + policy_weight*lp
+    update!(opt_state, model, gradient(total))
+end
+```
+
+Two losses, summed:
+
+- **Value MSE.** Squared error between the predicted scalar and the target
+  in `[-1, 1]`.
+- **Policy cross-entropy.** Standard CE over the 1924-move softmax. Illegal
+  moves are masked to `-1e9` *before* softmax so the gradient only competes
+  among legal candidates — this prevents the network from wasting capacity
+  on never-legal moves.
+
+Both losses are **sample-weighted** by the per-record weight; the
+denominator is the batch's total weight (not its size), so a batch full of
+low-confidence puzzles contributes proportionally less.
+
+---
+
+## Multi-dataset mixing
+
+The second `train_epoch!` overload takes `(dataset_paths, mixing_weights)`
+and samples each batch from one dataset by probability. Useful for blending
+puzzles + PGN games during a single run:
+
+```julia
+train_epoch!(model, opt_state,
+    ["data/puzzles.bin", "data/elite_pgn.bin"],
+    [0.4, 0.6])  # 40% puzzles, 60% PGN
+```
+
+The total batch count for the epoch is the weighted average of dataset
+sizes. Each batch is randomly sampled (`random_batch`, not the streaming
+iterator), which means with replacement — fine for large datasets, but if
+you mix one tiny dataset in, expect heavy duplication of those records.
+
+---
+
+## Checkpoint and log format
+
+After each epoch:
+
+- `checkpoints/<name>.jld2` — model state + arch metadata + `meta` dict
+  (run name, epoch, losses, dataset paths).
+- One JSON line appended to `<log_path>` (`checkpoints/train_log.jsonl`):
+  `{ts, epoch, n_batches, seconds, loss_value, loss_policy, loss_total,
+   batch_size, n_records}`.
+
+The dashboard polls `train_log.jsonl` to draw the live loss curve.
+
+---
+
+## Run script (`scripts/train.jl`)
+
+The standard entry point. Reads env vars (`EPOCHS`, `BATCH_SIZE`, `LR`,
+dataset paths) and orchestrates:
+
+1. (Re)build the dataset binaries if missing.
+2. Build a fresh model (or resume from a checkpoint).
+3. Pick a random run name (`silent_lasker`, `tactical_morphy`, …).
+4. Loop `train_epoch!` for the configured number of epochs.
+5. Write the final checkpoint and append to the log.
+
+---
+
+## What's missing
+
+- **Validation split.** Currently we report training loss only. A held-out
+  set (a few thousand puzzles never seen during training) would catch
+  overfitting and let us early-stop. Easy fix.
+- **Lr schedule.** Constant LR throughout. Cosine or step decay generally
+  buys a fraction of a percent on policy accuracy at the same compute cost.
+- **Self-play data generation.** `SelfPlay.jl` exists but isn't wired into
+  the loop. The plan: every N epochs, play 1000 self-play games at
+  short TC, label positions with the search's TT-derived value, append to
+  a self-play dataset, and mix at low weight (`0.1`).
+- **GPU.** Currently CPU-only via `Flux.cpu_device()`. The conv model is
+  small enough that GPU only matters above ~64 channels.

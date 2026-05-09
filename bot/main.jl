@@ -13,29 +13,37 @@ isempty(BOT_TOKEN) && error("Set LICHESS_TOKEN environment variable")
 
 const CHECKPOINTS_DIR = get(ENV, "CHECKPOINTS_DIR", joinpath(@__DIR__, "..", "checkpoints"))
 const LOGS_DIR        = get(ENV, "LOGS_DIR",        joinpath(@__DIR__, "..", "logs"))
+const SETUPS_DIR      = get(ENV, "SETUPS_DIR",      joinpath(@__DIR__, "..", "setups"))
 const TRACES_DIR      = joinpath(LOGS_DIR, "game_traces")
 const CONTROL_PORT    = parse(Int, get(ENV, "BOT_CONTROL_PORT", "8080"))
 const CONFIG_PATH     = joinpath(LOGS_DIR, "bot_config.json")
 const QUOTA_PATH      = joinpath(LOGS_DIR, "bot_quota.json")
 const BOT_LOG_PATH    = joinpath(LOGS_DIR, "bot_log.jsonl")
 
-mkpath(LOGS_DIR); mkpath(TRACES_DIR)
+mkpath(LOGS_DIR); mkpath(TRACES_DIR); mkpath(SETUPS_DIR)
 
 # ── Runtime config ────────────────────────────────────────────────────────────
 
-# Cycle through all standard time controls, bullet → rapid
-const TC_ROTATION = [
-    (60, 0), (120, 1),              # bullet
-    (180, 0), (180, 2), (300, 0), (300, 3),  # blitz
-    (600, 0), (600, 5), (900, 10),  # rapid
+# Master list of supported time controls (ultra-bullet → rapid).
+# Dashboard checkboxes pick from this list; the bot challenges only with enabled ones.
+# Labels follow chess convention: "<minutes>+<inc>", with "Xs+Y" for sub-minute clocks.
+# The tuple is (clock.limit seconds, clock.increment seconds) sent to Lichess.
+const TC_OPTIONS = [
+    ("15s+0", (15,   0)),  # ultra-bullet
+    ("30s+0", (30,   0)),  # ultra-bullet
+    ("1+0",   (60,   0)),  # bullet
+    ("1+1",   (60,   1)),  # bullet
+    ("2+1",   (120,  1)),  # bullet
+    ("3+0",   (180,  0)),  # bullet
+    ("3+2",   (180,  2)),  # blitz
+    ("5+0",   (300,  0)),  # blitz
+    ("5+3",   (300,  3)),  # blitz
+    ("10+0",  (600,  0)),  # rapid
+    ("10+5",  (600,  5)),  # rapid
+    ("15+10", (900, 10)),  # rapid
 ]
-const TC_INDEX = Ref(1)
-
-function next_tc()
-    tc = TC_ROTATION[TC_INDEX[]]
-    TC_INDEX[] = mod1(TC_INDEX[] + 1, length(TC_ROTATION))
-    tc
-end
+const TC_LABELS   = String[t[1] for t in TC_OPTIONS]
+const TC_BY_LABEL = Dict(t[1] => t[2] for t in TC_OPTIONS)
 
 const CONFIG_LOCK = ReentrantLock()
 const CONFIG = Ref(Dict{String,Any}(
@@ -45,7 +53,28 @@ const CONFIG = Ref(Dict{String,Any}(
     "rating_high"               => 1000,
     "daily_quota"               => 100,
     "min_challenge_gap_seconds" => 60,
+    # Default: all TCs enabled. Dashboard writes a subset.
+    "enabled_tcs"               => copy(TC_LABELS),
 ))
+
+# Pick a random enabled TC. Falls back to the full list if config is empty/invalid.
+function next_tc()
+    raw = lock(CONFIG_LOCK) do; get(CONFIG[], "enabled_tcs", TC_LABELS); end
+    labels = String[]
+    for x in raw
+        s = String(x)
+        haskey(TC_BY_LABEL, s) && push!(labels, s)
+    end
+    isempty(labels) && (labels = TC_LABELS)
+    TC_BY_LABEL[rand(labels)]
+end
+
+# Comma-separated list of currently enabled TC labels (for status display).
+function enabled_tc_summary()
+    raw = lock(CONFIG_LOCK) do; get(CONFIG[], "enabled_tcs", TC_LABELS); end
+    labels = String[String(x) for x in raw if haskey(TC_BY_LABEL, String(x))]
+    isempty(labels) ? "all" : join(labels, ",")
+end
 
 function load_config!()
     isfile(CONFIG_PATH) || return
@@ -70,6 +99,40 @@ function patch_config!(updates::Dict)
     end
     save_config()
 end
+
+# ── Engine setup ──────────────────────────────────────────────────────────────
+
+const SETUP_LOCK = ReentrantLock()
+const SETUP_META = Ref{Dict{String,Any}}(Dict{String,Any}())
+
+function _deployed_setup_path()
+    joinpath(SETUPS_DIR, "deployed.json")
+end
+
+function load_engine_setup!()
+    path = _deployed_setup_path()
+    if isfile(path)
+        cfg = Cassandra.load_engine_cfg(path)
+        Cassandra.apply_engine_cfg!(cfg)
+        lock(SETUP_LOCK) do
+            SETUP_META[] = Dict{String,Any}(
+                "name" => cfg.name,
+                "hash" => Cassandra.cfg_hash(cfg),
+            )
+        end
+        @info "[setup] Loaded" name=cfg.name
+    else
+        # Bootstrap default setup file so dashboard can discover it
+        cfg = Cassandra.get_engine_cfg()
+        Cassandra.save_engine_cfg(cfg, path)
+        lock(SETUP_LOCK) do
+            SETUP_META[] = Dict{String,Any}("name" => cfg.name, "hash" => Cassandra.cfg_hash(cfg))
+        end
+        @info "[setup] No deployed.json — using defaults, wrote $path"
+    end
+end
+
+current_setup_meta() = lock(SETUP_LOCK) do; copy(SETUP_META[]); end
 
 # ── Daily quota ───────────────────────────────────────────────────────────────
 
@@ -154,15 +217,38 @@ end
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 
+const LOADED_META = Ref{Dict{String,Any}}(Dict{String,Any}())
+
+function _needs_model()
+    cfg = Cassandra.get_engine_cfg()
+    cfg.ordering.use_policy_logits
+end
+
 function _load_model()
-    path = joinpath(CHECKPOINTS_DIR, "deployed.jld2")
-    isfile(path) ? (@info "Loading model $path"; Cassandra.load_model(path)) :
-                   (@info "No deployed model — random weights"; Cassandra.build_model())
+    if !_needs_model()
+        @info "[model] use_policy_logits=false — skipping checkpoint load"
+        LOADED_META[] = Dict{String,Any}()
+        return nothing
+    end
+    ckpt = Cassandra.get_engine_cfg().checkpoint
+    path = isempty(ckpt) ? joinpath(CHECKPOINTS_DIR, "deployed.jld2") :
+                           joinpath(CHECKPOINTS_DIR, "$ckpt.jld2")
+    if !isfile(path)
+        @warn "[model] Checkpoint not found: $path — running without NN"
+        LOADED_META[] = Dict{String,Any}()
+        return nothing
+    end
+    @info "[model] Loading $path"
+    model, meta = Cassandra.load_model(path)
+    LOADED_META[] = meta
+    @info "[model] Loaded $(get(meta, "run_name", ckpt))"
+    model
 end
 
 current_model() = lock(MODEL_LOCK) do; MODEL_REF[]; end
 
 function reload_model!()
+    load_engine_setup!()
     m = _load_model()
     lock(MODEL_LOCK) do; MODEL_REF[] = m; RELOAD_PENDING[] = false; end
     @info "Model reloaded"
@@ -170,8 +256,14 @@ end
 
 swap_model_if_pending!() = RELOAD_PENDING[] && reload_model!()
 
-_deployed_meta() = isfile(joinpath(LOGS_DIR, "deployed.json")) ?
-    JSON3.read(read(joinpath(LOGS_DIR, "deployed.json"), String)) : nothing
+function _deployed_meta()
+    m = LOADED_META[]
+    !isempty(m) && return m
+    # Fall back to legacy sidecar file written by old deploy scripts.
+    p = joinpath(LOGS_DIR, "deployed.json")
+    isfile(p) || return nothing
+    try JSON3.read(read(p, String), Dict{String,Any}) catch; nothing end
+end
 
 function _game_intro()
     meta = _deployed_meta()
@@ -240,8 +332,9 @@ end
 # ── Logging ───────────────────────────────────────────────────────────────────
 
 function log_game(game_id, result, color, opponent, opponent_rating, tc)
-    meta = _deployed_meta()
-    rec  = Dict{String,Any}(
+    meta  = _deployed_meta()
+    setup = current_setup_meta()
+    rec   = Dict{String,Any}(
         "ts" => Dates.format(now(), "yyyy-mm-ddTHH:MM:SS"),
         "game_id" => game_id, "result" => result, "color" => color,
         "opponent" => opponent, "opponent_rating" => opponent_rating,
@@ -251,6 +344,7 @@ function log_game(game_id, result, color, opponent, opponent_rating, tc)
     ep !== nothing && (rec["deployed_epoch"] = ep)
     mn !== nothing && (rec["model"] = string(mn))
     tc !== nothing && (rec["clock_limit"] = tc[1]; rec["clock_increment"] = tc[2])
+    !isempty(setup) && (rec["setup_name"] = get(setup, "name", ""); rec["setup_hash"] = get(setup, "hash", ""))
     open(BOT_LOG_PATH, "a") do io; JSON3.write(io, rec); println(io); end
 end
 
@@ -279,12 +373,15 @@ function handle_position(client, game_id, fen, moves_str, my_color)
         end
         # Store moves_str + Cassandra's move so next call can diff to find opponent's response
         PREV_MOVES[game_id] = isempty(moves_str) ? string(move) : moves_str * " " * string(move)
-        v, ent, top5 = Cassandra.policy_info(model, board)
+        trace_entry = (ply=n, moves_before=moves_str, move=move,
+            opponent_move=isempty(opp_move) ? nothing : opp_move)
+        if model !== nothing
+            v, ent, top5 = Cassandra.policy_info(model, board)
+            trace_entry = merge(trace_entry, (value=round(v; digits=4),
+                entropy=round(ent; digits=4), top5=top5))
+        end
         open(joinpath(TRACES_DIR, "$game_id.jsonl"), "a") do io
-            JSON3.write(io, (ply=n, moves_before=moves_str, move=move,
-                opponent_move=isempty(opp_move) ? nothing : opp_move,
-                value=round(v; digits=4), entropy=round(ent; digits=4), top5=top5))
-            println(io)
+            JSON3.write(io, trace_entry); println(io)
         end
     catch e
         @warn "[$game_id] Trace write failed" exception=e
@@ -493,7 +590,6 @@ function start_control_server()
 
     HTTP.register!(router, "GET", "/status", function(req)
         meta = _deployed_meta()
-        next = TC_ROTATION[TC_INDEX[]]
         body = JSON3.write((
             paused          = Bool(cfg("paused")),
             in_game         = IN_GAME[],
@@ -505,7 +601,8 @@ function start_control_server()
             model           = meta !== nothing ? get(meta, :run_name, nothing) : nothing,
             max_depth       = Cassandra.get_max_depth(),
             rating          = OWN_RATING[],
-            next_tc         = "$(next[1]÷60)+$(next[2])",
+            enabled_tcs     = enabled_tc_summary(),
+            tc_options      = TC_LABELS,
         ))
         HTTP.Response(200, ["Content-Type" => "application/json"], body)
     end)
@@ -545,6 +642,82 @@ function start_control_server()
 
     HTTP.register!(router, "GET", "/health", req -> HTTP.Response(200, "{\"ok\":true}"))
 
+    HTTP.register!(router, "GET", "/engine_config", function(req)
+        body = JSON3.write(Cassandra.engine_cfg_to_dict(Cassandra.get_engine_cfg()))
+        HTTP.Response(200, ["Content-Type" => "application/json"], body)
+    end)
+
+    HTTP.register!(router, "GET", "/engine_config/schema", function(req)
+        body = JSON3.write(Cassandra.ENGINE_CONFIG_SCHEMA)
+        HTTP.Response(200, ["Content-Type" => "application/json"], body)
+    end)
+
+    HTTP.register!(router, "POST", "/engine_config", function(req)
+        try
+            d   = JSON3.read(String(req.body), Dict{String,Any})
+            cfg = Cassandra.engine_cfg_from_dict(d)
+            Cassandra.apply_engine_cfg!(cfg)
+            # Persist as deployed setup
+            Cassandra.save_engine_cfg(cfg, _deployed_setup_path())
+            lock(SETUP_LOCK) do
+                SETUP_META[] = Dict{String,Any}("name" => cfg.name, "hash" => Cassandra.cfg_hash(cfg))
+            end
+            HTTP.Response(200, ["Content-Type" => "application/json"],
+                JSON3.write(Cassandra.engine_cfg_to_dict(cfg)))
+        catch e
+            HTTP.Response(400, "{\"error\":\"$(e)\"}")
+        end
+    end)
+
+    HTTP.register!(router, "GET", "/book", function(req)
+        entries = Cassandra.Book.list_entries()
+        body = JSON3.write((
+            count   = length(entries),
+            path    = Cassandra.Book.BOOK_PATH[],
+            entries = [(hash=e.hash, moves=e.moves) for e in entries],
+        ))
+        HTTP.Response(200, ["Content-Type" => "application/json"], body)
+    end)
+
+    HTTP.register!(router, "POST", "/book/line", function(req)
+        try
+            data = JSON3.read(String(req.body))
+            Cassandra.Book.add_line!(String(data.name), String(data.moves))
+            Cassandra.Book.save!()
+            HTTP.Response(200, "{\"ok\":true}")
+        catch e
+            HTTP.Response(400, "{\"error\":\"$(e)\"}")
+        end
+    end)
+
+    HTTP.register!(router, "POST", "/book/entry/delete", function(req)
+        try
+            data = JSON3.read(String(req.body))
+            Cassandra.Book.delete_entry!(String(data.hash), String(data.move))
+            Cassandra.Book.save!()
+            HTTP.Response(200, "{\"ok\":true}")
+        catch e
+            HTTP.Response(400, "{\"error\":\"$(e)\"}")
+        end
+    end)
+
+    HTTP.register!(router, "POST", "/book/import", function(req)
+        try
+            Cassandra.Book.import_curated!()
+            Cassandra.Book.save!()
+            n = length(Cassandra.Book.list_entries())
+            HTTP.Response(200, "{\"ok\":true,\"count\":$n}")
+        catch e
+            HTTP.Response(500, "{\"error\":\"$(e)\"}")
+        end
+    end)
+
+    HTTP.register!(router, "POST", "/book/clear", function(req)
+        Cassandra.Book.clear!()
+        Cassandra.Book.save!()
+        HTTP.Response(200, "{\"ok\":true}")
+    end)
+
     @async HTTP.serve(router, "0.0.0.0", CONTROL_PORT; verbose=false)
     @info "Control server on :$CONTROL_PORT"
 end
@@ -552,7 +725,7 @@ end
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 function run()
-    load_config!(); load_quota!()
+    load_config!(); load_quota!(); load_engine_setup!()
     start_control_server()
 
     client = BongCloud.LichessClient(token=BOT_TOKEN)
@@ -564,8 +737,9 @@ function run()
     @info "Bot online as $(OWN_NAME[]) (rating: $(something(OWN_RATING[], "unrated")))"
 
     let board = Cassandra.apply_moves("", Cassandra.START_FEN)
-        Cassandra.select_move(current_model(), board)
-        Cassandra.policy_info(current_model(), board)
+        m = current_model()
+        Cassandra.select_move(m, board)
+        m !== nothing && Cassandra.policy_info(m, board)
     end
     @info "JIT warmup done"
 

@@ -1,8 +1,7 @@
-name = "CassandraBenchmarks"
-uuid = "b1c2d3e4-f5a6-7890-bcde-f01234567891"
-authors = ["alemelis"]
-version = "0.1.0"
-
 [deps]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+Bobby = "bd34264e-e812-11e8-1ee8-bfb20fea2fb4"
 Cassandra = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+
+[compat]
+BenchmarkTools = "1.8.0"

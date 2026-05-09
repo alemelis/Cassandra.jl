@@ -37,3 +37,4 @@ data/*
 dashboard/*.json*
 logs/
 ideas.md
+book/book.json

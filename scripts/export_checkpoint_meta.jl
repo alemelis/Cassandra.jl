@@ -7,20 +7,9 @@ const CKPT_DIR   = get(ENV, "CHECKPOINTS_DIR", joinpath(@__DIR__, "..", "checkpo
 const INPUT_SIZE = 1280
 const N_MOVES    = 1924
 
-function _param_count(trunk_sizes::Vector{Int})
-    n = INPUT_SIZE * trunk_sizes[1] + trunk_sizes[1]
-    for i in 2:length(trunk_sizes)
-        n += trunk_sizes[i-1] * trunk_sizes[i] + trunk_sizes[i]
-    end
-    lw = trunk_sizes[end]
-    hw = max(32, lw ÷ 4)
-    n += lw * hw + hw        # value dense 1
-    n += hw * 1 + 1          # value dense 2
-    n += lw * N_MOVES + N_MOVES  # policy head
-    return n
-end
-
 skip = Set(["latest", "deployed"])
+errors = 0
+
 for fname in readdir(CKPT_DIR)
     endswith(fname, ".jld2") || continue
     name = splitext(fname)[1]
@@ -29,34 +18,43 @@ for fname in readdir(CKPT_DIR)
     jld_path  = joinpath(CKPT_DIR, fname)
     json_path = joinpath(CKPT_DIR, "$name.json")
 
-    existing = Dict{String,Any}()
-    if isfile(json_path)
-        try
-            existing = JSON3.read(read(json_path, String), Dict{String,Any})
-        catch; end
-    end
-
-    trunk_sizes, dropout = try
+    # Try to read embedded meta from the .jld2 first, then fall back to existing sidecar.
+    embedded = try
         JLD2.jldopen(jld_path, "r") do fh
-            ts = haskey(fh, "arch_trunk_sizes") ?
-                     Vector{Int}(fh["arch_trunk_sizes"]) : [256, 128]
-            dr = haskey(fh, "arch_dropout") ?
-                     Float32(fh["arch_dropout"]) : 0f0
-            (ts, dr)
+            haskey(fh, "meta") ? Dict{String,Any}(fh["meta"]) : Dict{String,Any}()
         end
     catch e
-        @warn "Could not read $fname" exception=e
+        @warn "Could not open $fname" exception=e
+        global errors += 1
         continue
     end
 
-    np = _param_count(trunk_sizes)
-    existing["trunk_sizes"]  = join(trunk_sizes, ",")
-    existing["dropout"]      = dropout
-    existing["param_count"]  = np
+    sidecar = if isfile(json_path)
+        try JSON3.read(read(json_path, String), Dict{String,Any}) catch; Dict{String,Any}() end
+    else
+        Dict{String,Any}()
+    end
+
+    # Embedded meta wins; sidecar fills gaps.
+    merged = merge(sidecar, embedded)
+
+    if isempty(get(merged, "run_name", ""))
+        @error "$name: no metadata found in .jld2 or sidecar JSON — " *
+               "refusing to write empty card. Re-train to embed metadata."
+        global errors += 1
+        continue
+    end
 
     open(json_path, "w") do io
-        JSON3.write(io, existing)
+        JSON3.write(io, merged)
     end
-    println("$name  trunk=$(join(trunk_sizes,"→"))  params=$(np)")
+
+    rn = get(merged, "run_name", name)
+    ts = get(merged, "trunk_sizes", "?")
+    pc = get(merged, "param_count", "?")
+    av = get(merged, "arch_version", "?")
+    println("$name  run=$rn  trunk=$ts  params=$pc  arch_v=$av")
 end
+
+errors > 0 && exit(1)
 println("Done.")
