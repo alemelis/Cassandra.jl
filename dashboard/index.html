@@ -28,12 +28,15 @@
             rel="stylesheet"
         />
         <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
-        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-        <link
-            rel="stylesheet"
-            href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css"
-        />
-        <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+        <!-- chessground: the actual library Lichess uses, with cburnett pieces + brown board -->
+        <link rel="stylesheet" href="https://unpkg.com/chessground@9.1.1/assets/chessground.base.css" />
+        <link rel="stylesheet" href="https://unpkg.com/chessground@9.1.1/assets/chessground.brown.css" />
+        <link rel="stylesheet" href="https://unpkg.com/chessground@9.1.1/assets/chessground.cburnett.css" />
+        <script type="module">
+          import { Chessground } from 'https://esm.sh/chessground@9.1.1';
+          window.Chessground = Chessground;
+          window.dispatchEvent(new Event('chessground-ready'));
+        </script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
         <style>
@@ -745,26 +748,39 @@
                 justify-content: flex-end;
             }
 
-            /* Replay */
+            /* Replay — chessground board, Lichess sizing */
             .replay-grid {
                 display: flex;
                 justify-content: center;
             }
-            #replay-board {
+            #replay-mid {
                 width: 100%;
-                max-width: 360px;
+                max-width: 560px;
             }
+            #replay-board,
+            #arena-board {
+                width: 100%;
+                aspect-ratio: 1 / 1;
+                /* chessground base.css needs an explicitly-sized wrap */
+            }
+            #replay-board.cg-wrap,
+            #arena-board.cg-wrap { display: block; }
             .replay-nav {
                 display: flex;
                 align-items: center;
                 gap: 8px;
-                margin-top: 8px;
+                margin-top: 10px;
             }
             .replay-nav .pos {
                 flex: 1;
                 text-align: center;
                 font-size: 12px;
                 color: var(--text-muted);
+            }
+            .replay-nav .btn {
+                min-width: 44px;     /* mobile tap target */
+                min-height: 44px;
+                font-size: 18px;
             }
             footer {
                 text-align: center;
@@ -979,9 +995,15 @@
                 .docs-sidebar { position: static; max-height: none; }
             }
 
-            #arena-board { width: 280px; }
-            .arena-replay-grid { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; align-items: start; }
-            @media (max-width: 640px) { .arena-replay-grid { grid-template-columns: 1fr; } #arena-board { width: 100%; } }
+            .arena-replay-grid {
+                display: grid;
+                grid-template-columns: minmax(280px, 420px) 1fr;
+                gap: 1rem;
+                align-items: start;
+            }
+            @media (max-width: 700px) {
+                .arena-replay-grid { grid-template-columns: 1fr; }
+            }
             .arena-log-box {
                 background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
                 font-family: monospace; font-size: 11px; padding: 8px; height: 160px;
@@ -2103,23 +2125,25 @@
                     $("r-link").href = `https://lichess.org/${gameId}`;
                     $("replay-mid").style.display = "";
 
-                    if (window.Chessboard) {
+                    const mountReplay = () => {
+                        if (!window.Chessground) return false;
+                        const el = document.getElementById("replay-board");
                         if (!_replay.board) {
-                            _replay.board = Chessboard("replay-board", {
-                                pieceTheme:
-                                    "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+                            _replay.board = Chessground(el, {
                                 orientation: _replay.color,
-                                position: "start",
+                                viewOnly: true,
+                                coordinates: true,
+                                animation: { enabled: false },
+                                drawable: { enabled: false },
                             });
                         } else {
-                            _replay.board.orientation(_replay.color);
+                            _replay.board.set({ orientation: _replay.color });
                         }
-                        setTimeout(() => {
-                            _replay.board.resize();
-                            renderReplayStep();
-                        }, 0);
-                    } else {
                         renderReplayStep();
+                        return true;
+                    };
+                    if (!mountReplay()) {
+                        window.addEventListener("chessground-ready", mountReplay, { once: true });
                     }
                 } catch (e) {
                     console.error(e);
@@ -2142,14 +2166,9 @@
                         const chess = _replay.initFen
                             ? new Chess(_replay.initFen)
                             : new Chess();
-                        chess.load &&
-                            _replay.initFen &&
-                            chess.load(_replay.initFen);
+                        chess.load && _replay.initFen && chess.load(_replay.initFen);
                         const prior = step.moves_before
-                            ? step.moves_before
-                                  .trim()
-                                  .split(/\s+/)
-                                  .filter(Boolean)
+                            ? step.moves_before.trim().split(/\s+/).filter(Boolean)
                             : [];
                         const uciMove = (m) =>
                             chess.move({
@@ -2158,36 +2177,32 @@
                                 promotion: m[4] || "q",
                             });
                         prior.forEach(uciMove);
-                        const from = step.move ? step.move.slice(0, 2) : null;
-                        const to = step.move ? step.move.slice(2, 4) : null;
-                        if (step.move) uciMove(step.move);
-                        _replay.board.position(chess.fen(), false);
-                        jQuery(".square-55d63").css("background", "");
-                        if (from && to) {
-                            jQuery(`.square-${from}, .square-${to}`).css(
-                                "background",
-                                "rgba(155,199,0,0.41)",
-                            );
+                        // Last move played to highlight: opponent's reply if present,
+                        // otherwise Cassandra's own move on this ply.
+                        let lastMove = null;
+                        if (step.move) {
+                            uciMove(step.move);
+                            lastMove = [step.move.slice(0, 2), step.move.slice(2, 4)];
                         }
-                        let oppMove = "";
                         if (prevStep) {
                             const prevMoves = (prevStep.moves_before || "").trim().split(/\s+/).filter(Boolean);
                             const currMoves = (step.moves_before || "").trim().split(/\s+/).filter(Boolean);
-                            // currMoves[prevMoves.length] = Cassandra's own previous move
-                            // currMoves[prevMoves.length + 1] = opponent's response
-                            if (currMoves.length > prevMoves.length + 1)
-                                oppMove = currMoves[prevMoves.length + 1];
+                            // currMoves[prevMoves.length + 1] = opponent's reply after our prev move
+                            const opp = currMoves[prevMoves.length + 1];
+                            if (opp && opp.length >= 4) {
+                                lastMove = [opp.slice(0, 2), opp.slice(2, 4)];
+                            }
                         }
-                        if (oppMove && oppMove.length >= 4) {
-                            jQuery(
-                                `.square-${oppMove.slice(0, 2)}, .square-${oppMove.slice(2, 4)}`,
-                            ).css("background", "rgba(155,199,0,0.41)");
-                        }
+                        _replay.board.set({
+                            fen: chess.fen(),
+                            lastMove,
+                            turnColor: chess.turn() === "w" ? "white" : "black",
+                            check: chess.in_check(),
+                        });
                     } catch (e) {
                         console.warn("replay render:", e);
                     }
                 }
-
             }
             function replayPrev() {
                 if (_replay.idx > 0) {
@@ -2884,20 +2899,54 @@
                 }
                 moveListEl.innerHTML = tokens.join(" ");
 
-                if (window.Chessboard) {
+                _ar.orientation = orientation;
+                const mountArena = () => {
+                    if (!window.Chessground) return false;
+                    const el = document.getElementById("arena-board");
                     if (!_ar.board) {
-                        _ar.board = Chessboard("arena-board", {
-                            pieceTheme: "https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png",
+                        _ar.board = Chessground(el, {
                             orientation,
-                            position: "start",
+                            viewOnly: true,
+                            coordinates: true,
+                            animation: { enabled: false },
+                            drawable: { enabled: false },
                         });
                     } else {
-                        _ar.board.orientation(orientation);
+                        _ar.board.set({ orientation });
                     }
-                    setTimeout(() => { _ar.board.resize(); arenaRenderStep(); }, 0);
-                } else {
                     arenaRenderStep();
+                    return true;
+                };
+                if (!mountArena()) {
+                    window.addEventListener("chessground-ready", mountArena, { once: true });
                 }
+            }
+
+            // Track FEN strings so we can derive last-move from consecutive positions.
+            function _diffMove(prevFen, nextFen) {
+                if (!prevFen || !nextFen) return null;
+                const sqs = (fen) => {
+                    const out = {};
+                    const rows = fen.split(" ")[0].split("/");
+                    for (let r = 0; r < 8; r++) {
+                        let f = 0;
+                        for (const ch of rows[r]) {
+                            if (/\d/.test(ch)) { f += parseInt(ch); continue; }
+                            const sq = String.fromCharCode(97 + f) + (8 - r);
+                            out[sq] = ch;
+                            f++;
+                        }
+                    }
+                    return out;
+                };
+                const a = sqs(prevFen), b = sqs(nextFen);
+                let from = null, to = null;
+                for (const sq in a) if (!(sq in b) || b[sq] !== a[sq]) {
+                    if (!(sq in b)) from = sq;        // square emptied
+                    else if (b[sq] !== a[sq]) to = sq; // piece replaced (capture)
+                }
+                for (const sq in b) if (!(sq in a)) to = sq; // square filled
+                return from && to ? [from, to] : null;
             }
 
             function arenaRenderStep() {
@@ -2905,7 +2954,15 @@
                 $("ar-prev").disabled = moveIdx <= 0;
                 $("ar-next").disabled = moveIdx >= moves.length - 1;
                 $("ar-pos").textContent = moveIdx === 0 ? "Start" : `Move ${moveIdx}/${moves.length - 1}`;
-                if (_ar.board) _ar.board.position(moves[moveIdx].fen, false);
+                if (_ar.board) {
+                    const fen = moves[moveIdx].fen;
+                    const lastMove = moveIdx > 0 ? _diffMove(moves[moveIdx - 1].fen, fen) : null;
+                    _ar.board.set({
+                        fen,
+                        lastMove,
+                        turnColor: fen.split(" ")[1] === "w" ? "white" : "black",
+                    });
+                }
                 // Highlight active move in list
                 document.querySelectorAll("[id^='arm-']").forEach(el => el.style.background = "");
                 if (moveIdx > 0) {
