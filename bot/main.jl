@@ -150,6 +150,7 @@ const OWN_RATING       = Ref{Union{Int,Nothing}}(nothing)
 const IN_GAME          = Ref(false)
 const CURRENT_GAME_ID  = Ref{Union{String,Nothing}}(nothing)
 const CURRENT_OPPONENT = Ref{String}("")
+const PENDING_TARGET  = Ref{String}("")
 const PENDING_ID       = Ref{Union{String,Nothing}}(nothing)
 
 const LOCKOUT_LOCK  = ReentrantLock()
@@ -157,6 +158,12 @@ const LOCKOUT_UNTIL = Ref{Union{DateTime,Nothing}}(nothing)
 
 const SKIPLIST      = Dict{String,DateTime}()
 const SKIPLIST_LOCK = ReentrantLock()
+
+const TRIED_TCS      = Dict{String,Set{String}}()
+const TRIED_TCS_LOCK = ReentrantLock()
+
+const LAST_FAIL      = Dict{String,DateTime}()
+const LAST_FAIL_LOCK = ReentrantLock()
 
 const PREV_MOVES = Dict{String,String}()
 
@@ -187,6 +194,49 @@ skipped(target::String) = lock(SKIPLIST_LOCK) do
     t = get(SKIPLIST, target, nothing)
     t === nothing && return false
     now() >= t ? (delete!(SKIPLIST, target); false) : true
+end
+
+function _get_tried_tcs(target::String)
+    lock(TRIED_TCS_LOCK) do
+        get(TRIED_TCS, target, Set{String}())
+    end
+end
+
+function _tried_tcs_add!(target::String, label::String)
+    lock(TRIED_TCS_LOCK) do
+        push!(get!(TRIED_TCS, target, Set{String}()), label)
+    end
+end
+
+function _all_tcs_exhausted(target::String)
+    tried = _get_tried_tcs(target)
+    raw = lock(CONFIG_LOCK) do; get(CONFIG[], "enabled_tcs", TC_LABELS); end
+    enabled = String[String(x) for x in raw if haskey(TC_BY_LABEL, String(x))]
+    isempty(enabled) && (enabled = TC_LABELS)
+    length(tried) >= length(enabled)
+end
+
+function _next_tc_for(target::String)
+    tried = _get_tried_tcs(target)
+    raw = lock(CONFIG_LOCK) do; get(CONFIG[], "enabled_tcs", TC_LABELS); end
+    enabled = String[String(x) for x in raw if haskey(TC_BY_LABEL, String(x))]
+    isempty(enabled) && (enabled = TC_LABELS)
+    remaining = [l for l in enabled if l ∉ tried]
+    isempty(remaining) && return nothing
+    TC_BY_LABEL[rand(remaining)]
+end
+
+function _should_backoff(target::String, secs::Int=15)
+    lock(LAST_FAIL_LOCK) do
+        t = get(LAST_FAIL, target, DateTime(0))
+        (now() - t) < Second(secs)
+    end
+end
+
+function _record_fail!(target::String)
+    lock(LAST_FAIL_LOCK) do
+        LAST_FAIL[target] = now()
+    end
 end
 
 # ── Pacing (self-pace to land ≈daily_quota games/day) ────────────────────────
@@ -226,6 +276,7 @@ function pick_target(client)
         isempty(n) && return false
         lowercase(n) == lowercase(my_name) && return false
         skipped(n) && return false
+        _all_tcs_exhausted(n) && return false
         my_r === nothing && return true
         r = _perf_rating(b)
         r === nothing && return true
@@ -378,6 +429,7 @@ function handle_event(client, event)
             return
         end
         PENDING_ID[]      = nothing
+        PENDING_TARGET[]  = ""
         IN_GAME[]         = true
         CURRENT_GAME_ID[] = game_id
         increment_quota!()
@@ -415,14 +467,20 @@ function handle_event(client, event)
         ch = event.challenge; ch === nothing && return
         dest = string(get(something(ch.destUser, Dict()), "name",
                           get(something(ch.destUser, Dict()), :name, "")))
+        isempty(dest) && (dest = PENDING_TARGET[])
         @info "Challenge declined by $dest — $(something(ch.declineReasonKey, "unknown"))"
-        isempty(dest) || skip!(dest)
-        PENDING_ID[] = nothing
+        if !isempty(dest)
+            _record_fail!(dest)
+            _all_tcs_exhausted(dest) && skip!(dest)
+        end
+        PENDING_ID[]      = nothing
+        PENDING_TARGET[]  = ""
 
     elseif event.type == "challengeCanceled"
         ch = event.challenge; ch === nothing && return
         @info "Challenge $(ch.id) cancelled"
-        PENDING_ID[] = nothing
+        PENDING_ID[]      = nothing
+        PENDING_TARGET[]  = ""
     end
 end
 
@@ -441,8 +499,16 @@ function matchmaker_loop(client)
 
         target = pick_target(client)
         target === nothing && (@warn "No eligible targets"; sleep(30); continue)
+        _should_backoff(target) && (sleep(5); continue)
 
-        lim, inc = next_tc()
+        result = _next_tc_for(target)
+        if result === nothing
+            skip!(target)
+            @info "All TCs exhausted for $target — skipping"
+            continue
+        end
+        lim, inc = result
+        _tried_tcs_add!(target, string(lim÷60) * "+" * string(inc))
 
         cid = try
             resp = BongCloud.create_challenge(client, target;
@@ -452,14 +518,15 @@ function matchmaker_loop(client)
         catch e
             msg = string(e)
             if   occursin("429", msg); set_lockout!(120)
-            elseif occursin("40",  msg); skip!(target)
+            elseif occursin("40",  msg); _record_fail!(target)
             end
             @warn "Challenge to $target failed" exception=e
-            nothing
+            continue
         end
 
         cid === nothing && continue
         PENDING_ID[] = cid
+        PENDING_TARGET[] = target
         @info "Challenged $target ($(lim÷60)+$inc) id=$cid"
 
         deadline = now() + Second(CHALLENGE_TTL)
@@ -469,7 +536,7 @@ function matchmaker_loop(client)
 
         if PENDING_ID[] == cid
             PENDING_ID[] = nothing
-            skip!(target)
+            _record_fail!(target)
             @info "Challenge $cid timed out — cancelling"
             try BongCloud.cancel_challenge(client, cid) catch; end
         end
@@ -486,6 +553,7 @@ function start_control_server()
             paused          = Bool(cfg("paused")),
             in_game         = IN_GAME[],
             opponent        = CURRENT_OPPONENT[],
+            pending_target  = PENDING_TARGET[],
             game_id         = CURRENT_GAME_ID[],
             games_today     = quota_count(),
             daily_quota     = Int(cfg("daily_quota")),

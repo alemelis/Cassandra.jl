@@ -161,6 +161,8 @@ def run_match():
         "model":        setup_name,
         "opponent":     f"stockfish-{STOCKFISH_ELO}",
         "opponent_elo": STOCKFISH_ELO,
+        "sf_strength":  STOCKFISH_ELO,
+        "tc":           MOVE_TIME,
         "games":        total,
         "wins":         wins,
         "draws":        draws,

@@ -1,9 +1,9 @@
 {
-  "name": "sharp_fischer",
-  "created_at": "2026-05-08T15:54:53",
+  "name": "combinatorial_spassky",
+  "created_at": "2026-05-09T14:16:03",
   "search": {
-    "max_depth": 6,
-    "time_limit_s": 1.1,
+    "max_depth": 9,
+    "time_limit_s": 3,
     "tt_size_log2": 20,
     "qsearch": true,
     "delta_pruning_margin_cp": 200,
@@ -23,6 +23,7 @@
     "rook_semi_cp": 12
   },
   "ordering": {
+    "use_policy_logits": false,
     "killers": true,
     "history": true
   },
@@ -30,5 +31,5 @@
     "enabled": true,
     "max_ply": 16
   },
-  "deployed_at": "2026-05-08T19:54:57"
+  "deployed_at": "2026-05-12T20:05:36"
 }

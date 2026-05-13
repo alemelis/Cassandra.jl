@@ -1,6 +1,6 @@
 FROM python:3-slim
 
-RUN pip install --no-cache-dir docker
+RUN pip install --no-cache-dir docker psutil
 
 WORKDIR /app
 
