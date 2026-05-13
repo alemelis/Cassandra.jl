@@ -53,6 +53,7 @@ services:
             - setups:/data/setups
             - ./dashboard:/app/dashboard:ro
             - /var/run/docker.sock:/var/run/docker.sock
+            - /sys/class/thermal:/sys/class/thermal:ro
         ports:
             - "8000:8000"
         networks:

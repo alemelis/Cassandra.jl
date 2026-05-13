@@ -9,10 +9,12 @@ Serves the static UI plus a thin JSON API:
   - /api/games               recent bot game log + per-game traces
   - /api/bot/*               proxies the Julia bot's control server
   - /api/arena/*             start/stop arena container, read logs
+  - /api/profile/*           run/stop/list flame-graph profiles
 """
 import http.server
 import json
 import os
+import re
 import random
 import urllib.error
 import urllib.request
@@ -46,6 +48,12 @@ LICHESS_TOKEN    = os.environ.get("LICHESS_TOKEN", "")
 DASHBOARD_SECRET = os.environ.get("DASHBOARD_SECRET", "")
 ARENA_IMAGE      = os.environ.get("ARENA_IMAGE",   "cassandrajl-arena")
 COMPOSE_PROJECT  = os.environ.get("COMPOSE_PROJECT", "cassandrajl")
+PROFILE_DIR      = os.path.join(LOGS_DIR, 'profile')
+
+_FEN_RE = re.compile(
+    r'^[rnbqkpRNBQKP1-8/]{1,71} [wb] (?:-|[KQkq]{1,4}) (?:-|[a-h][1-8]) \d+ \d+$'
+)
+_TS_RE = re.compile(r'^\d{8}T\d{6}$')
 
 _bot_username = None
 
@@ -65,43 +73,61 @@ def _lichess(path):
         return json.loads(r.read())
 
 def _arena_series():
-    """One history-series per opponent from arena_log.jsonl."""
+    """Single history-series for arena (consolidated by day, highest score wins)."""
     log_path = os.path.join(LOGS_DIR, 'arena_log.jsonl')
     if not os.path.isfile(log_path):
         return []
-    by_opp = {}
+    by_day = {}
     with open(log_path) as f:
         for line in f:
             try:
                 r = json.loads(line)
             except Exception:
                 continue
-            by_opp.setdefault(r.get('opponent', 'arena'), []).append(r)
-    series = []
-    for opp, records in by_opp.items():
-        points = [
-            [r['year'], r['month'] - 1, r['day'], round(r['cassandra_elo'])]
-            for r in records if r.get('cassandra_elo') is not None
-        ]
-        if points:
-            series.append({'name': opp, 'points': points})
-    return series
+            if r.get('cassandra_elo') is None:
+                continue
+            day_key = (r['year'], r['month'] - 1, r['day'])
+            if day_key not in by_day or r['cassandra_elo'] > by_day[day_key]['cassandra_elo']:
+                by_day[day_key] = r
+    if not by_day:
+        return []
+    points = []
+    for (y, m, d), r in sorted(by_day.items()):
+        points.append({
+            'x': [y, m, d],
+            'y': round(r['cassandra_elo']),
+            'sf_strength': r.get('sf_strength'),
+            'tc': r.get('tc'),
+        })
+    return [{'name': 'arena', 'points': points}]
 
 def _get_rating_history():
     global _bot_username
     arena = _arena_series()
+    arena_elo = arena[0]['points'][-1]['y'] if arena and arena[0].get('points') else None
     if not LICHESS_TOKEN:
-        return ({'username': 'cassandra-jl', 'history': arena}, None) if arena \
+        return ({'username': 'cassandra-jl', 'history': arena, 'current': {'arena': arena_elo}}, None) if arena \
                else (None, 'No LICHESS_TOKEN set')
     try:
         if not _bot_username:
             _bot_username = _lichess('/api/account')['username']
         history = _lichess(f'/api/user/{_bot_username}/rating-history')
-        active  = [p for p in history if p.get('points')]
-        return {'username': _bot_username, 'history': active + arena}, None
+        active = []
+        current = {'arena': arena_elo}
+        for p in history:
+            pts = p.get('points')
+            if not pts:
+                continue
+            active.append({
+                'name': p['name'],
+                'points': [{'x': pt[:3], 'y': pt[3]} for pt in pts]
+            })
+            if pts:
+                current[p['name']] = pts[-1][3]
+        return {'username': _bot_username, 'history': active + arena, 'current': current}, None
     except urllib.error.URLError as e:
         if arena:
-            return {'username': _bot_username or 'cassandra-jl', 'history': arena}, None
+            return {'username': _bot_username or 'cassandra-jl', 'history': arena, 'current': {'arena': arena_elo}}, None
         return None, str(e)
 
 # ── Games / traces ───────────────────────────────────────────────────────────
@@ -323,6 +349,119 @@ def _stop_arena():
         c.stop(timeout=10)
     return {'ok': True}
 
+# ── Profile helpers ───────────────────────────────────────────────────────────
+
+def _list_profile_runs():
+    os.makedirs(PROFILE_DIR, exist_ok=True)
+    metas = []
+    for fname in os.listdir(PROFILE_DIR):
+        if not fname.endswith('.meta.json'):
+            continue
+        try:
+            with open(os.path.join(PROFILE_DIR, fname)) as f:
+                metas.append(json.load(f))
+        except Exception:
+            pass
+    metas.sort(key=lambda m: m.get('ts', ''), reverse=True)
+    return metas
+
+def _profile_status():
+    try:
+        dc = _docker_client()
+        cs = dc.containers.list(all=True, filters={'name': 'cassandrajl-profile-run'})
+        if not cs:
+            return {'state': 'idle'}
+        c = cs[0]
+        status = c.status          # 'running', 'exited', 'created', …
+        exit_code = c.attrs['State'].get('ExitCode', 0)
+        started = c.attrs['State'].get('StartedAt', '')
+        if status == 'running':
+            return {'state': 'running', 'container_id': c.short_id, 'started_at': started}
+        if exit_code == 0:
+            return {'state': 'done', 'exit_code': exit_code, 'started_at': started}
+        return {'state': 'crashed', 'exit_code': exit_code, 'started_at': started}
+    except Exception as e:
+        return {'state': 'idle', 'error': str(e)}
+
+def _profile_gc():
+    """Remove any exited cassandrajl-profile-run container."""
+    try:
+        dc = _docker_client()
+        for c in dc.containers.list(all=True, filters={'name': 'cassandrajl-profile-run'}):
+            if c.status != 'running':
+                c.remove(force=True)
+    except Exception:
+        pass
+
+def _start_profile(params):
+    fen     = (params.get('fen') or '').strip()
+    label   = (params.get('label') or 'custom').strip()[:64]
+    seconds = float(params.get('seconds') or 5.0)
+    seconds = max(1.0, min(seconds, 300.0))
+
+    if fen and not _FEN_RE.match(fen):
+        raise ValueError(f'Invalid FEN: {fen!r}')
+
+    dc = _docker_client()
+    running = dc.containers.list(filters={'name': 'cassandrajl-profile-run'})
+    if running:
+        raise RuntimeError('Profile already running (409)')
+
+    _profile_gc()
+    os.makedirs(PROFILE_DIR, exist_ok=True)
+
+    env = {
+        'FEN':       fen,
+        'POS_LABEL': label,
+        'SECONDS':   str(seconds),
+        'SETUPS_DIR': '/data/setups',
+        'LOGS_DIR':   '/data/logs',
+    }
+    volumes = {
+        f'{COMPOSE_PROJECT}_logs':   {'bind': '/data/logs',   'mode': 'rw'},
+        f'{COMPOSE_PROJECT}_setups': {'bind': '/data/setups', 'mode': 'rw'},
+    }
+    uid = os.getuid()
+    gid = os.getgid()
+    dc.containers.run(
+        image=ARENA_IMAGE,
+        command='julia --project=. arena/profile.jl',
+        environment=env, volumes=volumes,
+        network=f'{COMPOSE_PROJECT}_internal',
+        user=f'{uid}:{gid}',
+        detach=True, remove=False,
+        name='cassandrajl-profile-run',
+    )
+    return {'ok': True}
+
+def _stop_profile():
+    dc = _docker_client()
+    cs = dc.containers.list(filters={'name': 'cassandrajl-profile-run'})
+    if not cs:
+        raise RuntimeError('No profile container running')
+    cs[0].stop(timeout=15)
+    return {'ok': True}
+
+def _delete_profile_run(ts):
+    if not _TS_RE.match(ts):
+        raise ValueError(f'Invalid timestamp: {ts!r}')
+    removed = []
+    for ext in ('.collapsed', '.meta.json'):
+        p = os.path.join(PROFILE_DIR, ts + ext)
+        if os.path.isfile(p):
+            os.remove(p)
+            removed.append(ts + ext)
+    return {'ok': True, 'removed': removed}
+
+def _get_profile_collapsed(ts):
+    if not _TS_RE.match(ts):
+        raise ValueError(f'Invalid timestamp: {ts!r}')
+    path = os.path.join(PROFILE_DIR, ts + '.collapsed')
+    if not os.path.isfile(path):
+        raise FileNotFoundError(f'{ts}.collapsed not found')
+    with open(path) as f:
+        return f.read()
+
 # ── HTTP handler ─────────────────────────────────────────────────────────────
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -338,11 +477,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             '/api/rating':            self._handle_rating,
             '/api/bot/status':        self._handle_bot_status,
             '/api/bot/config':        self._handle_bot_config_get,
+            '/api/bot/metrics':      self._handle_bot_metrics,
             '/api/games':             self._handle_games_list,
             '/api/book':              self._handle_book_get,
             '/api/setups':            self._handle_setups_list,
             '/api/setups/schema':     self._handle_setups_schema,
             '/api/arena':             self._handle_arena_get,
+            '/api/profile':           self._handle_profile_get,
         }
         h = routes.get(path)
         if h:
@@ -351,6 +492,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json(200, _container_logs('cassandrajl-bot', self._n_param(20)))
         elif path.startswith('/api/arena/logs'):
             self._json(200, _container_logs('cassandrajl-arena', self._n_param(50)))
+        elif path.startswith('/api/profile/logs'):
+            self._json(200, _container_logs('cassandrajl-profile-run', self._n_param(40)))
+        elif path.startswith('/api/profile/run/'):
+            self._handle_profile_collapsed(path[len('/api/profile/run/'):])
         elif path.startswith('/api/games/') and path.endswith('/trace'):
             self._handle_game_trace(path[len('/api/games/'):-len('/trace')])
         elif path.startswith('/api/setups/'):
@@ -368,16 +513,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_DELETE(self):
         path = self.path.split('?')[0]
-        if not path.startswith('/api/setups/'):
-            self.send_error(404); return
         if not _auth_ok(self.headers):
             self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
-        try:
-            self._json(200, _delete_setup(path[len('/api/setups/'):]))
-        except (ValueError, FileNotFoundError) as e:
-            self._json(400, {'ok': False, 'error': str(e)})
-        except Exception as e:
-            self._json(500, {'ok': False, 'error': str(e)})
+        if path.startswith('/api/profile/run/'):
+            try:
+                self._json(200, _delete_profile_run(path[len('/api/profile/run/'):]))
+            except (ValueError, FileNotFoundError) as e:
+                self._json(400, {'ok': False, 'error': str(e)})
+            except Exception as e:
+                self._json(500, {'ok': False, 'error': str(e)})
+        elif path.startswith('/api/setups/'):
+            try:
+                self._json(200, _delete_setup(path[len('/api/setups/'):]))
+            except (ValueError, FileNotFoundError) as e:
+                self._json(400, {'ok': False, 'error': str(e)})
+            except Exception as e:
+                self._json(500, {'ok': False, 'error': str(e)})
+        else:
+            self.send_error(404)
 
     def do_POST(self):
         path = self.path.split('?')[0]
@@ -390,6 +543,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             '/api/dashboard/restart':  self._handle_dashboard_restart,
             '/api/arena/run':          self._handle_arena_run,
             '/api/arena/stop':         self._handle_arena_stop,
+            '/api/profile/run':        self._handle_profile_run,
+            '/api/profile/stop':       self._handle_profile_stop,
             '/api/book/line':          self._handle_book_add_line,
             '/api/book/entry/delete':  self._handle_book_delete_entry,
             '/api/book/import':        self._handle_book_import,
@@ -482,6 +637,43 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def _handle_bot_status(self):     self._json(200, self._bot_get('/status', {'unreachable': True}))
     def _handle_bot_config_get(self): self._json(200, self._bot_get('/config', {'unreachable': True}))
 
+    def _handle_bot_metrics(self):
+        import psutil, subprocess, os
+        from datetime import datetime, timezone
+
+        cpu = psutil.cpu_percent(interval=0.1)
+        mem = psutil.virtual_memory()
+        temp = None
+        
+        # Try sensors command first
+        try:
+            result = subprocess.run(['sensors', '-j'], capture_output=True, timeout=2)
+            if result.returncode == 0:
+                import json
+                for chip in json.loads(result.stdout).values():
+                    if isinstance(chip, dict):
+                        for k, v in chip.items():
+                            if k.startswith('temp') and isinstance(v, dict) and v.get('input'):
+                                temp = round(v['input'], 1)
+                                break
+                        if temp: break
+        except:
+            pass
+        
+        # Fallback: read from thermal zone
+        if not temp:
+            try:
+                for zone in os.listdir('/sys/class/thermal'):
+                    path = f'/sys/class/thermal/{zone}/temp'
+                    if os.path.isfile(path):
+                        with open(path) as f:
+                            temp = round(int(f.read()) / 1000, 1)
+                        break
+            except:
+                pass
+
+        self._json(200, {'cpu': round(cpu,1), 'mem_mb': mem.used//(1024*1024), 'mem_pct': round(mem.used/mem.total*100,1), 'temp': temp, 'ts': datetime.now(timezone.utc).isoformat()})
+
     def _handle_games_list(self):
         self._json(200, {'games': _list_games(self._n_param(200))})
 
@@ -513,6 +705,41 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not _auth_ok(self.headers):
             self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
         try:    self._json(200, _stop_arena())
+        except RuntimeError as e: self._json(409, {'ok': False, 'error': str(e)})
+        except Exception as e:    self._json(500, {'ok': False, 'error': str(e)})
+
+    # ── Profile ──────────────────────────────────────────────────────────────
+
+    def _handle_profile_get(self):
+        self._json(200, {'runs': _list_profile_runs(), 'status': _profile_status()})
+
+    def _handle_profile_collapsed(self, ts):
+        try:
+            text = _get_profile_collapsed(ts)
+            body = text.encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Content-Length', len(body))
+            self.send_header('Cache-Control', 'public, max-age=31536000, immutable')
+            self.send_header('ETag', f'"{ts}"')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(body)
+        except (ValueError, FileNotFoundError) as e:
+            self._json(404, {'ok': False, 'error': str(e)})
+
+    def _handle_profile_run(self):
+        if not _auth_ok(self.headers):
+            self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
+        try:    self._json(200, _start_profile(self._read_json()))
+        except ValueError as e:   self._json(400, {'ok': False, 'error': str(e)})
+        except RuntimeError as e: self._json(409, {'ok': False, 'error': str(e)})
+        except Exception as e:    self._json(500, {'ok': False, 'error': str(e)})
+
+    def _handle_profile_stop(self):
+        if not _auth_ok(self.headers):
+            self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
+        try:    self._json(200, _stop_profile())
         except RuntimeError as e: self._json(409, {'ok': False, 'error': str(e)})
         except Exception as e:    self._json(500, {'ok': False, 'error': str(e)})
 
@@ -645,6 +872,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 if __name__ == '__main__':
     os.makedirs(LOGS_DIR, exist_ok=True)
+    os.makedirs(PROFILE_DIR, exist_ok=True)
     with http.server.HTTPServer(('', PORT), Handler) as httpd:
         print(f'Dashboard → http://localhost:{PORT}')
         httpd.serve_forever()
