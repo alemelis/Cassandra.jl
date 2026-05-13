@@ -3378,9 +3378,9 @@
             };
 
             function onPresetChange() {
-                const v = $("p-preset").value;
-                $("p-fen-field").style.display = v === "custom" ? "" : "none";
-                if (v !== "custom") $("p-fen").value = "";
+                const v = document.getElementById("p-preset").value;
+                document.getElementById("p-fen-field").style.display = v === "custom" ? "" : "none";
+                if (v !== "custom") document.getElementById("p-fen").value = "";
             }
 
             // ── Parse collapsed stacks into a call tree ──────────────────────
@@ -3479,7 +3479,7 @@
             // ── Main draw ────────────────────────────────────────────────────
             function flameDraw() {
                 const p = state.profile;
-                const canvas = $("pf-canvas");
+                const canvas = document.getElementById("pf-canvas");
                 if (!p.focus) return;
 
                 // Compute device pixel ratio for crisp rendering.
@@ -3538,15 +3538,15 @@
                     const matched = rects.filter(r => r.label.toLowerCase().includes(q) && !r.isOther);
                     const matchedVal = matched.reduce((s, r) => Math.max(s, r.node?.value ?? 0), 0);
                     const pct = p.focus.value > 0 ? Math.round(matchedVal / p.focus.value * 100) : 0;
-                    $("pf-match").textContent = `${pct}% of samples match`;
+                    document.getElementById("pf-match").textContent = `${pct}% of samples match`;
                 } else {
-                    $("pf-match").textContent = "";
+                    document.getElementById("pf-match").textContent = "";
                 }
             }
 
             // ── Hit-test ─────────────────────────────────────────────────────
             function flameClick(e) {
-                const canvas = $("pf-canvas");
+                const canvas = document.getElementById("pf-canvas");
                 const rect = canvas.getBoundingClientRect();
                 const dpr = window.devicePixelRatio || 1;
                 const cx = (e.clientX - rect.left);
@@ -3557,19 +3557,19 @@
                 );
                 if (!hit) return;
                 if (hit.isOther) {
-                    $("pf-info").textContent = `${hit._otherVal?.toLocaleString() ?? "?"} samples in collapsed frames (zoom into parent to expand)`;
+                    document.getElementById("pf-info").textContent = `${hit._otherVal?.toLocaleString() ?? "?"} samples in collapsed frames (zoom into parent to expand)`;
                     return;
                 }
                 if (hit.node === state.profile.focus) {
-                    $("pf-info").textContent = `${hit.label}  —  ${hit.node.value.toLocaleString()} samples (focused)`;
+                    document.getElementById("pf-info").textContent = `${hit.label}  —  ${hit.node.value.toLocaleString()} samples (focused)`;
                     return;
                 }
                 // Zoom into this frame.
                 hit.node.parent = hit.node.parent ?? state.profile.focus;
                 state.profile.focus = hit.node;
-                $("pf-up").disabled = false;
+                document.getElementById("pf-up").disabled = false;
                 flameDraw();
-                $("pf-info").textContent = `${hit.label}  —  ${hit.node.value.toLocaleString()} samples`;
+                document.getElementById("pf-info").textContent = `${hit.label}  —  ${hit.node.value.toLocaleString()} samples`;
             }
 
             function flameZoomOut() {
@@ -3577,9 +3577,9 @@
                 if (p.focus && p.focus.parent) {
                     p.focus = p.focus.parent;
                     flameDraw();
-                    $("pf-info").textContent = `Zoomed out to: ${p.focus.name === "root" ? "all" : p.focus.name}`;
+                    document.getElementById("pf-info").textContent = `Zoomed out to: ${p.focus.name === "root" ? "all" : p.focus.name}`;
                 }
-                $("pf-up").disabled = !p.focus?.parent;
+                document.getElementById("pf-up").disabled = !p.focus?.parent;
             }
 
             function flameSearch(q) {
@@ -3591,7 +3591,7 @@
             }
 
             function flameToggleC() {
-                state.profile.showC = $("pf-c").checked;
+                state.profile.showC = document.getElementById("pf-c").checked;
                 flameDraw();
             }
 
@@ -3607,7 +3607,7 @@
             }
 
             function renderProfileRuns() {
-                const wrap = $("profile-runs-wrap");
+                const wrap = document.getElementById("profile-runs-wrap");
                 const runs = state.profile.runs;
                 if (!runs.length) { wrap.innerHTML = '<span class="muted">No runs yet.</span>'; return; }
 
@@ -3634,9 +3634,9 @@
 
             function renderProfileStatus() {
                 const st = state.profile.status;
-                const startBtn = $("p-start");
-                const stopBtn  = $("p-stop");
-                const fb       = $("p-fb");
+                const startBtn = document.getElementById("p-start");
+                const stopBtn  = document.getElementById("p-stop");
+                const fb       = document.getElementById("p-fb");
                 const running  = st.state === "running";
                 startBtn.disabled = running;
                 stopBtn.style.display = running ? "" : "none";
@@ -3652,26 +3652,26 @@
             }
 
             async function startProfile() {
-                const preset = $("p-preset").value;
-                const fen    = preset === "custom" ? $("p-fen").value.trim() : PRESET_FENS[preset];
+                const preset = document.getElementById("p-preset").value;
+                const fen    = preset === "custom" ? document.getElementById("p-fen").value.trim() : PRESET_FENS[preset];
                 const label  = preset === "custom" ? "custom" : preset;
-                const secs   = parseFloat($("p-secs").value) || 5;
-                $("p-fb").textContent = "Starting…";
-                $("p-log").style.display = "none";
-                $("p-log").textContent = "";
+                const secs   = parseFloat(document.getElementById("p-secs").value) || 5;
+                document.getElementById("p-fb").textContent = "Starting…";
+                document.getElementById("p-log").style.display = "none";
+                document.getElementById("p-log").textContent = "";
                 try {
                     await postJSON("/api/profile/run", { fen, label, seconds: secs });
-                    $("p-fb").textContent = "Running…";
+                    document.getElementById("p-fb").textContent = "Running…";
                     state.profile.status = { state: "running" };
                     renderProfileStatus();
                     _pollProfileLogs();
                 } catch(e) {
-                    $("p-fb").textContent = "Error: " + e.message;
+                    document.getElementById("p-fb").textContent = "Error: " + e.message;
                 }
             }
 
             async function _pollProfileLogs() {
-                const logBox = $("p-log");
+                const logBox = document.getElementById("p-log");
                 logBox.style.display = "";
                 const poll = async () => {
                     if (state.profile.status.state !== "running") return;
@@ -3696,15 +3696,15 @@
             }
 
             async function selectProfileRun(ts) {
-                const viewer = $("profile-flame-viewer");
+                const viewer = document.getElementById("profile-flame-viewer");
                 viewer.style.display = "";
-                $("pf-title").textContent = "Loading…";
-                $("pf-sub").textContent = "";
-                $("pf-info").textContent = "Tap a frame to inspect.";
-                $("pf-search").value = "";
+                document.getElementById("pf-title").textContent = "Loading…";
+                document.getElementById("pf-sub").textContent = "";
+                document.getElementById("pf-info").textContent = "Tap a frame to inspect.";
+                document.getElementById("pf-search").value = "";
                 state.profile.query = "";
                 state.profile.showC = false;
-                $("pf-c").checked = false;
+                document.getElementById("pf-c").checked = false;
 
                 try {
                     const text = await getText("/api/profile/run/" + ts);
@@ -3715,21 +3715,21 @@
 
                     // Find meta from runs list.
                     const meta = state.profile.runs.find(r => r.ts === ts);
-                    $("pf-title").textContent = meta ? `${meta.position_label} — ${meta.total_samples?.toLocaleString()} samples` : ts;
-                    $("pf-sub").textContent   = meta ? `${meta.seconds}s · ${meta.setup_name}` : "";
-                    $("pf-up").disabled = true;
+                    document.getElementById("pf-title").textContent = meta ? `${meta.position_label} — ${meta.total_samples?.toLocaleString()} samples` : ts;
+                    document.getElementById("pf-sub").textContent   = meta ? `${meta.seconds}s · ${meta.setup_name}` : "";
+                    document.getElementById("pf-up").disabled = true;
 
                     viewer.scrollIntoView({ behavior: "smooth", block: "start" });
                     // Defer draw until canvas has layout width.
                     requestAnimationFrame(() => { requestAnimationFrame(flameDraw); });
                 } catch(e) {
-                    $("pf-title").textContent = "Failed to load";
-                    $("pf-sub").textContent = e.message;
+                    document.getElementById("pf-title").textContent = "Failed to load";
+                    document.getElementById("pf-sub").textContent = e.message;
                 }
             }
 
             function closeProfile() {
-                $("profile-flame-viewer").style.display = "none";
+                document.getElementById("profile-flame-viewer").style.display = "none";
                 state.profile.tree = null;
                 state.profile.focus = null;
                 state.profile.current = null;
