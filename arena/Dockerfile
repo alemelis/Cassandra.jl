@@ -6,11 +6,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY Bobby.jl/ /Bobby.jl/
+COPY BongCloud.jl/ /BongCloud.jl/
 
 WORKDIR /app
 
 COPY Cassandra.jl/Project.toml Cassandra.jl/Manifest.toml ./
-RUN julia -e 'using Pkg; Pkg.activate("/app"); Pkg.develop(PackageSpec(path="/Bobby.jl")); Pkg.instantiate()'
+RUN julia -e 'using Pkg; Pkg.activate("/app"); Pkg.develop(PackageSpec(path="/Bobby.jl")); Pkg.develop(PackageSpec(path="/BongCloud.jl")); Pkg.instantiate()'
 
 COPY Cassandra.jl/src/ src/
 RUN julia --project=. -e 'using Cassandra'

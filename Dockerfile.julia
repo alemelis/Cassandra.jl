@@ -4,15 +4,14 @@ RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Bobby.jl lives at ../Bobby.jl relative to the project; mirror that in the image.
 COPY Bobby.jl/ /Bobby.jl/
+COPY BongCloud.jl/ /BongCloud.jl/
 
 WORKDIR /app
 
 # Manifests first for layer-cached package install.
 COPY Cassandra.jl/Project.toml Cassandra.jl/Manifest.toml ./
 
-# Pkg.develop rewrites Manifest.toml in place so Bobby resolves to /Bobby.jl —
-# this file must NOT be overwritten by a later COPY.
-RUN julia -e 'using Pkg; Pkg.activate("/app"); Pkg.develop(PackageSpec(path="/Bobby.jl")); Pkg.instantiate()'
+RUN julia -e 'using Pkg; Pkg.activate("/app"); Pkg.develop(PackageSpec(path="/Bobby.jl")); Pkg.develop(PackageSpec(path="/BongCloud.jl")); Pkg.instantiate()'
 
 # Source + precompile
 COPY Cassandra.jl/src/ src/
