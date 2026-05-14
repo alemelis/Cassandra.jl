@@ -36,6 +36,5 @@
   "book": {
     "enabled": true,
     "max_ply": 16
-  },
-  "deployed_at": "2026-05-14T09:00:00"
+  }
 }
