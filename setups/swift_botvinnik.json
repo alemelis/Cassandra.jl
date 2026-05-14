@@ -18,9 +18,9 @@
     "lmr_reduction": 1,
     "aspiration_window_cp": 50,
     "time_strategy": "phase_weighted",
-    "time_panic_threshold_ms": 10000,
+    "time_panic_threshold_ms": 5000,
     "time_min_ms": 100,
-    "time_max_ms": 5000,
+    "time_max_ms": 1500,
     "time_critical_bonus": 1.5
   },
   "eval": {
