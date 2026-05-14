@@ -30,6 +30,8 @@ include("Eval/Classical.jl")
 # ── Search ───────────────────────────────────────────────────────────────────
 include("Search/TT.jl")
 include("Search/MoveOrder.jl")
+include("Search/SEE.jl")
+include("Search/TimeBudget.jl")
 include("Search/AlphaBeta.jl")
 
 # ── Opening book ─────────────────────────────────────────────────────────────
@@ -43,7 +45,7 @@ export START_FEN, apply_moves
 export classical_eval
 
 # Search / engine
-export search, select_move, tt_clear!
+export search, select_move, tt_clear!, compute_budget_ms
 
 # Engine config
 export EngineConfig, SearchConfig, EvalConfig, OrderingConfig, BookConfig
