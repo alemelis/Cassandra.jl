@@ -1,11 +1,25 @@
 # Piece values for MVV-LVA capture ordering (Bobby piece type index 0..6)
 const _CAPTURE_VALS = (0f0, 100f0, 320f0, 330f0, 500f0, 900f0, 20_000f0)
 
-# Maximum ply for killer/history tables
+# Maximum ply for killer/history tables. Also the depth of pre-allocated
+# per-ply scratch buffers in SearchContext.
 const MAX_PLY = 128
+
+# Worst-case legal move count from a single chess position is 218; round up
+# to 256 for cache-friendly Vector sizes and to absorb null-move stub bumps.
+const MAX_MOVES_PER_POS = 256
+
+# Pre-allocated repetition stack capacity: game history + search tree.
+const REP_STACK_CAPACITY = MAX_PLY + 512
+
+# Sentinel "history disabled" matrix — allocated once, reused everywhere we
+# need to call order_moves! without a real history table.
+const EMPTY_HISTORY = zeros(Int32, 7, 64)
 
 # ── Search context ────────────────────────────────────────────────────────────
 # Reused across the entire iterative-deepening tree; reset before each search.
+# Every per-node scratch buffer lives here so _negamax/_qsearch are
+# allocation-free in the steady state.
 mutable struct SearchContext
     nodes::Int
     # killers[ply] = (move_idx1, move_idx2) — indices into the moves array
@@ -13,15 +27,88 @@ mutable struct SearchContext
     # history[piece_type+1, to_sq+1] — bonus on β-cutoff
     history::Matrix{Int32}
 
-    SearchContext() = new(0,
-                          fill((Int16(0), Int16(0)), MAX_PLY),
-                          zeros(Int32, 7, 64))
+    # Repetition: linear stack of position hashes along the current search
+    # path. `rep_top` is the index of the most-recently-pushed hash.
+    # Bounded scan up to `board.halfmove` entries detects in-tree repetitions
+    # without hashing.
+    rep_stack::Vector{UInt64}
+    rep_top::Int
+
+    # Per-ply scratch for move ordering. order_buf[ply+1] holds permutation
+    # indices, score_buf[ply+1] the parallel scores. resize!'d in place; no
+    # heap traffic after warm-up.
+    order_buf::Vector{Vector{Int16}}
+    score_buf::Vector{Vector{Float32}}
+
+    # Per-ply move lists for allocation-free getMoves!.
+    # legal_buf[ply+1] = legal moves; scratch_buf[ply+1] = king/EP scratch.
+    # pin_ray_buf[ply+1] = 64-element pin-ray vector for computePinData!.
+    legal_buf::Vector{Bobby.Moves}
+    scratch_buf::Vector{Bobby.Moves}
+    pin_ray_buf::Vector{Vector{UInt64}}
+
+    function SearchContext()
+        order_buf = Vector{Vector{Int16}}(undef, MAX_PLY + 2)
+        score_buf = Vector{Vector{Float32}}(undef, MAX_PLY + 2)
+        legal_buf  = Vector{Bobby.Moves}(undef, MAX_PLY + 2)
+        scratch_buf = Vector{Bobby.Moves}(undef, MAX_PLY + 2)
+        pin_ray_buf = Vector{Vector{UInt64}}(undef, MAX_PLY + 2)
+        @inbounds for i in 1:(MAX_PLY + 2)
+            order_buf[i]   = Vector{Int16}(undef, MAX_MOVES_PER_POS)
+            score_buf[i]   = Vector{Float32}(undef, MAX_MOVES_PER_POS)
+            legal_buf[i]   = Bobby.Moves(MAX_MOVES_PER_POS)
+            scratch_buf[i] = Bobby.Moves(MAX_MOVES_PER_POS)
+            pin_ray_buf[i] = zeros(UInt64, 64)
+        end
+        new(0,
+            fill((Int16(0), Int16(0)), MAX_PLY),
+            zeros(Int32, 7, 64),
+            Vector{UInt64}(undef, REP_STACK_CAPACITY),
+            0,
+            order_buf,
+            score_buf,
+            legal_buf,
+            scratch_buf,
+            pin_ray_buf)
+    end
 end
 
 function reset_ctx!(ctx::SearchContext)
     ctx.nodes = 0
     fill!(ctx.killers, (Int16(0), Int16(0)))
     fill!(ctx.history, Int32(0))
+    ctx.rep_top = 0
+    return ctx
+end
+
+# ── Repetition stack ─────────────────────────────────────────────────────────
+# Path-only repetition (two-fold inside the tree counts as a draw, standard).
+
+@inline function rep_push!(ctx::SearchContext, hash::UInt64)
+    ctx.rep_top += 1
+    @inbounds ctx.rep_stack[ctx.rep_top] = hash
+    return ctx
+end
+
+@inline function rep_pop!(ctx::SearchContext)
+    ctx.rep_top -= 1
+    return ctx
+end
+
+# Scan backwards up to `halfmove` entries (positions since the last
+# irreversible move) for a matching hash. Hashes encode side-to-move, so a
+# match implies same side. We step by 2 because only same-side positions
+# can repeat — saves half the comparisons.
+@inline function is_repetition(ctx::SearchContext, hash::UInt64, halfmove::Int)::Bool
+    scan = min(ctx.rep_top, halfmove)
+    scan <= 0 && return false
+    top = ctx.rep_top
+    @inbounds for i in 2:2:scan
+        if ctx.rep_stack[top - i + 1] == hash
+            return true
+        end
+    end
+    return false
 end
 
 # ── Move priority ─────────────────────────────────────────────────────────────
@@ -57,18 +144,36 @@ end
     return s
 end
 
-function order_moves!(order::Vector{Int16}, moves::Vector{Bobby.Move},
+# In-place move ordering. Caller passes pre-allocated `order` and `scores`
+# buffers (from SearchContext.order_buf / score_buf) — no allocations here.
+function order_moves!(order::Vector{Int16}, scores::Vector{Float32},
+                      moves::Vector{Bobby.Move},
                       tt_best::Int16,
                       killers::NTuple{2,Int16},
                       history::Matrix{Int32})
     n = length(moves)
     resize!(order, n)
-    scores = Vector{Float32}(undef, n)
-    for i in 1:n
+    resize!(scores, n)
+    @inbounds for i in 1:n
         order[i] = Int16(i)
         scores[i] = _move_priority(moves[i], tt_best, Int16(i), killers, history)
     end
-    sort!(order, by=i -> -scores[i])
+    # Insertion sort on the order permutation, comparing by the parallel
+    # scores array. Insertion sort is allocation-free (sort!(...; by=closure)
+    # on Julia 1.12 boxes the closure), and the typical post-move-ordering
+    # list is near-sorted, so this is fast in practice.
+    @inbounds for i in 2:n
+        oi = order[i]
+        si = scores[oi]
+        j  = i
+        while j > 1
+            oprev = order[j - 1]
+            scores[oprev] >= si && break
+            order[j] = oprev
+            j -= 1
+        end
+        order[j] = oi
+    end
     return order
 end
 

@@ -18,6 +18,21 @@ Base.@kwdef mutable struct SearchConfig
     lmr_reduction::Int      = 1
 
     aspiration_window_cp::Int = 50
+
+    # SEE-based capture filtering in qsearch. Captures with see < threshold
+    # are skipped. Default 0 prunes hopeless captures only; negative values
+    # accept slightly losing captures (useful for tactical personalities).
+    see_qsearch_threshold_cp::Int = 0
+
+    # Adaptive time control. The bot supplies remaining_ms / increment_ms
+    # per move (Lichess clock); `time_strategy` picks how to slice them.
+    # `time_limit_s` above remains the fallback when the bot can't supply
+    # a clock (offline tools, benchmarks, correspondence games).
+    time_strategy::String         = "phase_weighted"   # "fixed"|"linear"|"phase_weighted"
+    time_panic_threshold_ms::Int  = 10_000             # below this → panic mode
+    time_min_ms::Int              = 50                 # never search less than this
+    time_max_ms::Int              = 3_000              # hard cap even with big clocks
+    time_critical_bonus::Float64  = 1.3                # ×budget when in check
 end
 
 Base.@kwdef mutable struct EvalConfig
@@ -62,6 +77,12 @@ const ENGINE_CONFIG_SCHEMA = Dict{String,Any}(
     "search.lmr_min_move_idx"      => Dict("type"=>"int",   "min"=>1,  "max"=>10,   "step"=>1,   "description"=>"Move index (1-based) after which LMR kicks in.", "doc"=>"search.md#late-move-reductions"),
     "search.lmr_reduction"         => Dict("type"=>"int",   "min"=>1,  "max"=>3,    "step"=>1,   "description"=>"Ply reduction applied to late moves under LMR.", "doc"=>"search.md#late-move-reductions"),
     "search.aspiration_window_cp"  => Dict("type"=>"int",   "min"=>0,  "max"=>200,  "step"=>10,  "description"=>"Initial aspiration window around previous iteration score (cp). 0 = full window.", "doc"=>"search.md#aspiration-windows"),
+    "search.see_qsearch_threshold_cp" => Dict("type"=>"int", "min"=>-300, "max"=>300, "step"=>10, "description"=>"SEE threshold for qsearch capture pruning (cp). Captures with SEE below this are skipped. 0 = prune hopeless only; negative accepts slight losers (tactical personalities).", "doc"=>"search.md#quiescence-search"),
+    "search.time_strategy"          => Dict("type"=>"enum", "options"=>["fixed","linear","phase_weighted"], "description"=>"How to allocate per-move time from the Lichess clock. phase_weighted spends most in the middlegame; linear is classical remaining/N+inc; fixed uses time_limit_s.", "doc"=>"search.md#time-control"),
+    "search.time_panic_threshold_ms" => Dict("type"=>"int", "min"=>1000, "max"=>120000, "step"=>500, "description"=>"Remaining clock (ms) below which panic mode engages — overrides the chosen strategy with a tiny per-move slice.", "doc"=>"search.md#time-control"),
+    "search.time_min_ms"             => Dict("type"=>"int", "min"=>10,   "max"=>5000,   "step"=>10,  "description"=>"Minimum per-move search budget (ms).", "doc"=>"search.md#time-control"),
+    "search.time_max_ms"             => Dict("type"=>"int", "min"=>100,  "max"=>60000,  "step"=>100, "description"=>"Maximum per-move search budget (ms). Hard cap even with big clocks.", "doc"=>"search.md#time-control"),
+    "search.time_critical_bonus"     => Dict("type"=>"float", "min"=>1.0, "max"=>3.0,   "step"=>0.1, "description"=>"Multiplier applied to the budget on critical positions (currently: when in check).", "doc"=>"search.md#time-control"),
     "eval.bishop_pair_cp"          => Dict("type"=>"int",   "min"=>0,  "max"=>100,  "step"=>5,   "description"=>"Bonus for having both bishops (centipawns).", "doc"=>"eval.md#bishop-pair"),
     "eval.rook_open_cp"            => Dict("type"=>"int",   "min"=>0,  "max"=>80,   "step"=>5,   "description"=>"Bonus for rook on fully open file (no pawns of either side).", "doc"=>"eval.md#rook-open-file"),
     "eval.rook_semi_cp"            => Dict("type"=>"int",   "min"=>0,  "max"=>50,   "step"=>5,   "description"=>"Bonus for rook on semi-open file (no own pawns).", "doc"=>"eval.md#rook-open-file"),
@@ -106,6 +127,12 @@ function engine_cfg_to_dict(cfg::EngineConfig)::Dict{String,Any}
             "lmr_min_move_idx"       => s.lmr_min_move_idx,
             "lmr_reduction"          => s.lmr_reduction,
             "aspiration_window_cp"   => s.aspiration_window_cp,
+            "see_qsearch_threshold_cp" => s.see_qsearch_threshold_cp,
+            "time_strategy"            => s.time_strategy,
+            "time_panic_threshold_ms"  => s.time_panic_threshold_ms,
+            "time_min_ms"              => s.time_min_ms,
+            "time_max_ms"              => s.time_max_ms,
+            "time_critical_bonus"      => s.time_critical_bonus,
         ),
         "eval" => Dict{String,Any}(
             "bishop_pair_cp" => e.bishop_pair_cp,
@@ -148,6 +175,12 @@ function engine_cfg_from_dict(d::Dict)::EngineConfig
             lmr_min_move_idx        = get(s, "lmr_min_move_idx",        4),
             lmr_reduction           = get(s, "lmr_reduction",           1),
             aspiration_window_cp    = get(s, "aspiration_window_cp",    50),
+            see_qsearch_threshold_cp = get(s, "see_qsearch_threshold_cp", 0),
+            time_strategy            = String(get(s, "time_strategy", "phase_weighted")),
+            time_panic_threshold_ms  = Int(get(s, "time_panic_threshold_ms", 10_000)),
+            time_min_ms              = Int(get(s, "time_min_ms", 50)),
+            time_max_ms              = Int(get(s, "time_max_ms", 3_000)),
+            time_critical_bonus      = Float64(get(s, "time_critical_bonus", 1.3)),
         ),
         eval = EvalConfig(
             bishop_pair_cp = get(e, "bishop_pair_cp", 40),

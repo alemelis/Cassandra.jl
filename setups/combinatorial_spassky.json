@@ -1,13 +1,12 @@
 {
-  "name": "swift_botvinnik",
-  "created_at": "2026-05-14T09:00:00",
+  "name": "combinatorial_spassky",
+  "created_at": "2026-05-09T14:16:03",
   "search": {
-    "max_depth": 32,
-    "time_limit_s": 1.0,
+    "max_depth": 9,
+    "time_limit_s": 3,
     "tt_size_log2": 20,
     "qsearch": true,
     "delta_pruning_margin_cp": 200,
-    "see_qsearch_threshold_cp": 0,
     "check_extension": true,
     "null_move_enabled": true,
     "null_move_R": 2,
@@ -16,12 +15,7 @@
     "lmr_min_depth": 3,
     "lmr_min_move_idx": 4,
     "lmr_reduction": 1,
-    "aspiration_window_cp": 50,
-    "time_strategy": "phase_weighted",
-    "time_panic_threshold_ms": 10000,
-    "time_min_ms": 100,
-    "time_max_ms": 5000,
-    "time_critical_bonus": 1.5
+    "aspiration_window_cp": 50
   },
   "eval": {
     "bishop_pair_cp": 40,
@@ -36,6 +30,5 @@
   "book": {
     "enabled": true,
     "max_ply": 16
-  },
-  "deployed_at": "2026-05-14T09:00:00"
+  }
 }

@@ -309,12 +309,27 @@ end
 
 # ── Game ──────────────────────────────────────────────────────────────────────
 
-function handle_position(client, game_id, fen, moves_str, my_color)
+function handle_position(client, game_id, fen, moves_str, my_color;
+                         wtime_ms::Int=0, btime_ms::Int=0,
+                         winc_ms::Int=0, binc_ms::Int=0)
     board      = Cassandra.apply_moves(moves_str, fen)
     is_my_turn = (board.active && my_color == :white) || (!board.active && my_color == :black)
     is_my_turn || return
 
-    move = Cassandra.select_move(board)
+    # Adaptive per-move budget from the live Lichess clock. If wtime/btime
+    # is missing (correspondence / initial GameFull with no state clock),
+    # `compute_budget_ms` returns the configured fallback.
+    cfg = Cassandra.get_engine_cfg()
+    my_remaining = my_color == :white ? wtime_ms : btime_ms
+    my_increment = my_color == :white ? winc_ms  : binc_ms
+    moves_played = isempty(strip(moves_str)) ? 0 : length(split(moves_str))
+    budget_ms = Cassandra.compute_budget_ms(
+        my_remaining, my_increment, board, cfg;
+        moves_played = moves_played,
+        in_check     = false,   # engine recomputes; cheap sentinel here
+    )
+
+    move = Cassandra.select_move(board; time_budget_ms = budget_ms)
     if isnothing(move)
         @info "[$game_id] No legal moves — resigning"
         BongCloud.resign_game(client, game_id)
@@ -383,8 +398,17 @@ function play_game(client, game_id)
                 catch e; @warn "[$game_id] Trace header failed" exception=e; end
 
                 state_dict = something(event.state, Dict{String,Any}())
+                # The GameFull event has the initial clock in `clk` (seconds).
+                # If the embedded state already has wtime/btime (ms), prefer
+                # those; otherwise seed from `lim`.
+                init_lim_ms = Int(get(clk, "initial", 0))
+                wt = Int(get(state_dict, "wtime", init_lim_ms))
+                bt = Int(get(state_dict, "btime", init_lim_ms))
+                wi = Int(get(state_dict, "winc",  Int(get(clk, "increment", 0))))
+                bi = Int(get(state_dict, "binc",  Int(get(clk, "increment", 0))))
                 handle_position(client, game_id, initial_fen[],
-                    String(get(state_dict, "moves", "")), my_color[])
+                    String(get(state_dict, "moves", "")), my_color[];
+                    wtime_ms=wt, btime_ms=bt, winc_ms=wi, binc_ms=bi)
 
             elseif event isa BongCloud.GameState
                 if event.status != "started"
@@ -400,7 +424,9 @@ function play_game(client, game_id)
                              opponent_name[], opponent_rating[], game_tc[])
                     break
                 end
-                handle_position(client, game_id, initial_fen[], event.moves, my_color[])
+                handle_position(client, game_id, initial_fen[], event.moves, my_color[];
+                    wtime_ms=event.wtime, btime_ms=event.btime,
+                    winc_ms=event.winc,   binc_ms=event.binc)
             end
         end
     catch e
