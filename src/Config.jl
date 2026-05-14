@@ -176,7 +176,7 @@ function engine_cfg_from_dict(d::Dict)::EngineConfig
             lmr_reduction           = get(s, "lmr_reduction",           1),
             aspiration_window_cp    = get(s, "aspiration_window_cp",    50),
             see_qsearch_threshold_cp = get(s, "see_qsearch_threshold_cp", 0),
-            time_strategy            = String(get(s, "time_strategy", "phase_weighted")),
+            time_strategy            = string(get(s, "time_strategy", "phase_weighted")),
             time_panic_threshold_ms  = Int(get(s, "time_panic_threshold_ms", 10_000)),
             time_min_ms              = Int(get(s, "time_min_ms", 50)),
             time_max_ms              = Int(get(s, "time_max_ms", 3_000)),
