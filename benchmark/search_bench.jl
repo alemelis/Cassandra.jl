@@ -161,31 +161,34 @@ function instrumented_search(b, depth)
     cfg.search.time_limit_s = 600.0
     Cassandra.tt_clear!()
     ctx = SearchContext()
-    
+
     deadline = time() + 600.0
     # Warmup
     _negamax(b, depth, -INF_SCORE, INF_SCORE, 0, deadline, ctx, cfg)
-    # Measure
+    # Measure: pick the fastest of 3 runs for NPS; record allocs + GC from that run.
     t_best = Inf
     nodes_best = 0
+    bytes_best = 0
+    gcpct_best = 0.0
     for _ in 1:3
         Cassandra.tt_clear!()
         ctx2 = SearchContext()
-        
         deadline = time() + 600.0
-        t0 = time_ns()
-        _negamax(b, depth, -INF_SCORE, INF_SCORE, 0, deadline, ctx2, cfg)
-        elapsed = (time_ns() - t0) / 1e9
+        result = @timed _negamax(b, depth, -INF_SCORE, INF_SCORE, 0, deadline, ctx2, cfg)
+        elapsed = result.time
         if elapsed < t_best
             t_best = elapsed
             nodes_best = ctx2.nodes
+            bytes_best = result.bytes
+            gcpct_best = elapsed > 0 ? 100.0 * result.gctime / elapsed : 0.0
         end
     end
-    return t_best, nodes_best
+    return t_best, nodes_best, bytes_best, gcpct_best
 end
 
-@printf("%-22s  %5s  %14s  %10s  %12s\n", "Position", "Depth", "Nodes", "Time (s)", "NPS")
-println("-"^72)
+@printf("%-22s  %5s  %14s  %10s  %12s  %10s  %6s\n",
+    "Position", "Depth", "Nodes", "Time (s)", "NPS", "Alloc MB", "GC %")
+println("-"^90)
 
 # Pick depth per position to keep total runtime manageable.
 const SEARCH_DEPTHS = Dict(
@@ -202,15 +205,15 @@ global total_time  = 0.0
 for (name, fen) in POSITIONS
     b = board(fen)
     d = SEARCH_DEPTHS[name]
-    t, n = instrumented_search(b, d)
+    t, n, bytes, gcpct = instrumented_search(b, d)
     nps = n / t
-    @printf("%-22s  d%-4d  %14s  %10.3f  %12s\n",
-        name, d, format_int(n), t, format_nps(nps))
+    @printf("%-22s  d%-4d  %14s  %10.3f  %12s  %10.1f  %5.1f%%\n",
+        name, d, format_int(n), t, format_nps(nps), bytes / 1e6, gcpct)
     global total_nodes += n
     global total_time  += t
 end
 
-println("-"^72)
+println("-"^90)
 @printf("%-22s        %14s  %10.3f  %12s\n",
     "TOTAL", format_int(total_nodes), total_time,
     format_nps(total_nodes / total_time))

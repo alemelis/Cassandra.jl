@@ -40,12 +40,25 @@ mutable struct SearchContext
     order_buf::Vector{Vector{Int16}}
     score_buf::Vector{Vector{Float32}}
 
+    # Per-ply move lists for allocation-free getMoves!.
+    # legal_buf[ply+1] = legal moves; scratch_buf[ply+1] = king/EP scratch.
+    # pin_ray_buf[ply+1] = 64-element pin-ray vector for computePinData!.
+    legal_buf::Vector{Bobby.Moves}
+    scratch_buf::Vector{Bobby.Moves}
+    pin_ray_buf::Vector{Vector{UInt64}}
+
     function SearchContext()
         order_buf = Vector{Vector{Int16}}(undef, MAX_PLY + 2)
         score_buf = Vector{Vector{Float32}}(undef, MAX_PLY + 2)
+        legal_buf  = Vector{Bobby.Moves}(undef, MAX_PLY + 2)
+        scratch_buf = Vector{Bobby.Moves}(undef, MAX_PLY + 2)
+        pin_ray_buf = Vector{Vector{UInt64}}(undef, MAX_PLY + 2)
         @inbounds for i in 1:(MAX_PLY + 2)
-            order_buf[i] = Vector{Int16}(undef, MAX_MOVES_PER_POS)
-            score_buf[i] = Vector{Float32}(undef, MAX_MOVES_PER_POS)
+            order_buf[i]   = Vector{Int16}(undef, MAX_MOVES_PER_POS)
+            score_buf[i]   = Vector{Float32}(undef, MAX_MOVES_PER_POS)
+            legal_buf[i]   = Bobby.Moves(MAX_MOVES_PER_POS)
+            scratch_buf[i] = Bobby.Moves(MAX_MOVES_PER_POS)
+            pin_ray_buf[i] = zeros(UInt64, 64)
         end
         new(0,
             fill((Int16(0), Int16(0)), MAX_PLY),
@@ -53,7 +66,10 @@ mutable struct SearchContext
             Vector{UInt64}(undef, REP_STACK_CAPACITY),
             0,
             order_buf,
-            score_buf)
+            score_buf,
+            legal_buf,
+            scratch_buf,
+            pin_ray_buf)
     end
 end
 

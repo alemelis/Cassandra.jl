@@ -24,6 +24,44 @@ end
     (side.N | side.B | side.R | side.Q) != UInt64(0)
 end
 
+# Apply a null move (toggle side, clear EP) in-place; returns a 3-tuple for undo.
+# Incremental hash: XOR out EP file key, XOR in "no EP", flip ZOBRIST_SIDE.
+@inline function _apply_null_move!(board::Bobby.Board)
+    prev_ep      = board.enpassant
+    prev_hash    = board.hash
+    prev_halfmove = board.halfmove
+
+    h = prev_hash
+    # Remove old EP key
+    if prev_ep != Bobby.EMPTY
+        h ⊻= @inbounds Bobby.ZOBRIST_EP[(trailing_zeros(prev_ep) % 8) + 1]
+    else
+        h ⊻= @inbounds Bobby.ZOBRIST_EP[9]
+    end
+    h ⊻= @inbounds Bobby.ZOBRIST_EP[9]   # new EP is EMPTY → slot 9
+    h ⊻= Bobby.ZOBRIST_SIDE
+
+    board.active    = !board.active
+    board.enpassant = Bobby.EMPTY
+    board.halfmove  = prev_halfmove + 1
+    board.hash      = h
+
+    return (prev_ep, prev_hash, prev_halfmove)
+end
+
+@inline function _undo_null_move!(board::Bobby.Board, prev_ep, prev_hash, prev_halfmove)
+    board.active    = !board.active
+    board.enpassant = prev_ep
+    board.halfmove  = prev_halfmove
+    board.hash      = prev_hash
+end
+
+# Check the system clock at most once every 1024 nodes to amortize VDSO overhead.
+# The ~700μs worst-case overshoot at 1.4M NPS is acceptable for time management.
+@inline time_exceeded(ctx::SearchContext, deadline::Float64) =
+    (ctx.nodes & 0x3FF) == 0 && time() > deadline
+
+# Compat shim used at the root level where ctx is not yet set up (deadline-only checks).
 @inline time_exceeded(deadline::Float64) = time() > deadline
 
 # Index into ctx.order_buf / score_buf for the given ply, clamped to the
@@ -37,7 +75,7 @@ function _qsearch(board::Bobby.Board, alpha::Float32, beta::Float32,
                   ply::Int, deadline::Float64, ctx::SearchContext,
                   cfg::EngineConfig)::Float32
 
-    time_exceeded(deadline) && return _ABORT_SCORE
+    time_exceeded(ctx, deadline) && return _ABORT_SCORE
     ctx.nodes += 1
 
     stand_pat = classical_eval(board,
@@ -47,19 +85,27 @@ function _qsearch(board::Bobby.Board, alpha::Float32, beta::Float32,
     stand_pat >= beta  && return beta
     alpha = max(alpha, stand_pat)
 
-    all_moves = Bobby.getMoves(board, board.active)
-
     slot   = _buf_slot(ply)
+    legal  = ctx.legal_buf[slot]
+    Bobby.getMoves!(legal, ctx.scratch_buf[slot], ctx.pin_ray_buf[slot],
+                   board, board.active)
+
+    # Checkmate / stalemate detection (qsearch owns this for depth-0 leaf nodes).
+    if isempty(legal.moves)
+        return Bobby.inCheck(board, board.active) ?
+               -(MATE_SCORE - Float32(ply)) : 0f0
+    end
+
     order  = ctx.order_buf[slot]
     scores = ctx.score_buf[slot]
-    order_moves!(order, scores, all_moves.moves, Int16(0),
+    order_moves!(order, scores, legal.moves, Int16(0),
                  (Int16(0), Int16(0)), EMPTY_HISTORY)
 
     delta_margin = Float32(cfg.search.delta_pruning_margin_cp)
     see_threshold = cfg.search.see_qsearch_threshold_cp
 
     for i in order
-        m = all_moves.moves[i]
+        m = legal.moves[i]
         is_capture = m.take.type != 0
         is_qpromo  = m.promotion == Bobby.PIECE_QUEEN
         (is_capture || is_qpromo) || continue
@@ -75,9 +121,10 @@ function _qsearch(board::Bobby.Board, alpha::Float32, beta::Float32,
             end
         end
 
-        child = Bobby.makeMove(board, m)
-        score = -_qsearch(child, -beta, -alpha, ply + 1, deadline, ctx, cfg)
-        time_exceeded(deadline) && return _ABORT_SCORE
+        undo  = Bobby.makeMove!(board, m)
+        score = -_qsearch(board, -beta, -alpha, ply + 1, deadline, ctx, cfg)
+        Bobby.unmakeMove!(board, undo)
+        time_exceeded(ctx, deadline) && return _ABORT_SCORE
 
         score >= beta && return beta
         alpha = max(alpha, score)
@@ -93,7 +140,7 @@ function _negamax(board::Bobby.Board, depth::Int,
                   ctx::SearchContext,
                   cfg::EngineConfig)::Float32
 
-    time_exceeded(deadline) && return _ABORT_SCORE
+    time_exceeded(ctx, deadline) && return _ABORT_SCORE
 
     # Repetition on search path → draw (path-only, bounded by halfmove)
     is_repetition(ctx, board.hash, board.halfmove) && return 0f0
@@ -102,23 +149,30 @@ function _negamax(board::Bobby.Board, depth::Int,
     tt_score, tt_best = tt_probe(board.hash, depth, ply, alpha, beta)
     tt_score !== nothing && return tt_score
 
-    legal = Bobby.getMoves(board, board.active)
-
-    if isempty(legal.moves)
-        return Bobby.inCheck(board, board.active) ?
-               -(MATE_SCORE - Float32(ply)) : 0f0
-    end
-    board.halfmove >= 100 && return 0f0
-
+    # Compute in_check early: needed for check extension before the depth check.
+    # inCheck is fast (9 ns) and avoids calling getMoves! at depth-0 leaf nodes
+    # where qsearch will generate moves anyway.
     in_check = Bobby.inCheck(board, board.active)
 
     # Check extension
     cfg.search.check_extension && in_check && (depth += 1)
 
+    # Leaf node: hand off to qsearch (which owns checkmate detection) or eval.
     if depth <= 0
         cfg.search.qsearch && return _qsearch(board, alpha, beta, ply, deadline, ctx, cfg)
         return classical_eval(board, cfg.eval.bishop_pair_cp,
                               cfg.eval.rook_open_cp, cfg.eval.rook_semi_cp)
+    end
+
+    board.halfmove >= 100 && return 0f0
+
+    slot  = _buf_slot(ply)
+    legal = ctx.legal_buf[slot]
+    Bobby.getMoves!(legal, ctx.scratch_buf[slot], ctx.pin_ray_buf[slot],
+                   board, board.active)
+
+    if isempty(legal.moves)
+        return in_check ? -(MATE_SCORE - Float32(ply)) : 0f0
     end
 
     ctx.nodes += 1
@@ -127,14 +181,15 @@ function _negamax(board::Bobby.Board, depth::Int,
     pv_node = (beta - alpha) > 1f0
     if cfg.search.null_move_enabled && !in_check && !pv_node &&
        depth >= cfg.search.null_move_min_depth && _has_non_pawn(board)
-        null_board = _make_null_move(board)
         R = cfg.search.null_move_R
-        rep_push!(ctx, board.hash)
-        null_score = -_negamax(null_board, depth - 1 - R,
+        prev_ep, prev_hash, prev_hm = _apply_null_move!(board)
+        rep_push!(ctx, prev_hash)
+        null_score = -_negamax(board, depth - 1 - R,
                                -beta, -beta + 1f0,
                                ply + 1, deadline, ctx, cfg)
         rep_pop!(ctx)
-        time_exceeded(deadline) && return _ABORT_SCORE
+        _undo_null_move!(board, prev_ep, prev_hash, prev_hm)
+        time_exceeded(ctx, deadline) && return _ABORT_SCORE
         null_score >= beta && return beta
     end
 
@@ -143,7 +198,6 @@ function _negamax(board::Bobby.Board, depth::Int,
                                      (Int16(0), Int16(0))
     hist    = cfg.ordering.history ? ctx.history : EMPTY_HISTORY
 
-    slot   = _buf_slot(ply)
     order  = ctx.order_buf[slot]
     scores = ctx.score_buf[slot]
     order_moves!(order, scores, legal.moves, tt_best, killers, hist)
@@ -157,7 +211,7 @@ function _negamax(board::Bobby.Board, depth::Int,
 
     for (move_num, i) in enumerate(order)
         m = legal.moves[i]
-        child = Bobby.makeMove(board, m)
+        undo = Bobby.makeMove!(board, m)
 
         # Late Move Reductions for quiet moves
         reduction = 0
@@ -166,18 +220,20 @@ function _negamax(board::Bobby.Board, depth::Int,
             reduction = cfg.search.lmr_reduction
         end
 
-        child_score = -_negamax(child, depth - 1 - reduction,
+        child_score = -_negamax(board, depth - 1 - reduction,
                                 -beta, -alpha,
                                 ply + 1, deadline, ctx, cfg)
 
         # Re-search at full depth if LMR failed high
-        if reduction > 0 && child_score > alpha && !time_exceeded(deadline)
-            child_score = -_negamax(child, depth - 1,
+        if reduction > 0 && child_score > alpha && !time_exceeded(ctx, deadline)
+            child_score = -_negamax(board, depth - 1,
                                     -beta, -alpha,
                                     ply + 1, deadline, ctx, cfg)
         end
 
-        if time_exceeded(deadline)
+        Bobby.unmakeMove!(board, undo)
+
+        if time_exceeded(ctx, deadline)
             aborted = true
             break
         end
@@ -212,9 +268,6 @@ end
 function search(board::Bobby.Board;
                 cfg::EngineConfig=get_engine_cfg(),
                 time_budget_ms::Union{Nothing,Integer}=nothing)::Union{String,Nothing}
-    legal = Bobby.getMoves(board, board.active)
-    isempty(legal.moves) && return nothing
-
     scfg          = cfg.search
     budget_s      = time_budget_ms === nothing ?
                         scfg.time_limit_s :
@@ -223,15 +276,20 @@ function search(board::Bobby.Board;
     ctx           = SearchContext()
 
     # Root uses the ply-0 slot of the pre-allocated buffers.
+    root_legal = ctx.legal_buf[1]
+    Bobby.getMoves!(root_legal, ctx.scratch_buf[1], ctx.pin_ray_buf[1],
+                   board, board.active)
+    isempty(root_legal.moves) && return nothing
+
     root_order  = ctx.order_buf[1]
     root_scores = ctx.score_buf[1]
-    order_moves!(root_order, root_scores, legal.moves,
+    order_moves!(root_order, root_scores, root_legal.moves,
                  Int16(0), (Int16(0), Int16(0)), EMPTY_HISTORY)
 
-    n_legal     = length(legal.moves)
+    n_legal     = length(root_legal.moves)
     move_scores = Vector{Float32}(undef, n_legal)  # one alloc per search
 
-    best_move  = legal.moves[root_order[1]]
+    best_move  = root_legal.moves[root_order[1]]
     prev_score = 0f0
 
     for depth in 1:scfg.max_depth
@@ -254,10 +312,11 @@ function search(board::Bobby.Board;
             fill!(move_scores, -INF_SCORE)
 
             for i in root_order
-                child = Bobby.makeMove(board, legal.moves[i])
-                score = -_negamax(child, depth - 1, -beta, -alpha,
+                undo  = Bobby.makeMove!(board, root_legal.moves[i])
+                score = -_negamax(board, depth - 1, -beta, -alpha,
                                   1, deadline, ctx, cfg)
-                if time_exceeded(deadline)
+                Bobby.unmakeMove!(board, undo)
+                if time_exceeded(ctx, deadline)
                     timed_out = true
                     break
                 end
@@ -304,7 +363,7 @@ function search(board::Bobby.Board;
             end
         end
 
-        best_move  = legal.moves[iter_best_idx]
+        best_move  = root_legal.moves[iter_best_idx]
         prev_score = iter_best_score
 
         # Hoist the iteration's best move to the front of root_order without
