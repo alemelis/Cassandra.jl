@@ -35,6 +35,8 @@
   },
   "book": {
     "enabled": true,
-    "max_ply": 16
+    "path": "/data/setups/books/gm2001.bin",
+    "chaos": 0.0,
+    "max_ply": 20
   }
 }

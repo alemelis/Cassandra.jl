@@ -1844,95 +1844,28 @@
 
             <section class="view" data-view="book">
                 <div class="card" style="padding: 1.5rem">
+                    <h2 style="margin-top: 0">Opening book</h2>
+                    <p class="muted" style="font-size: 0.9rem; line-height: 1.5">
+                        Cassandra reads opening moves from a
+                        <a href="https://www.chessprogramming.org/PolyGlot" target="_blank">Polyglot</a>
+                        <code>.bin</code> file. Configure the path in your
+                        deployed setup under <code>book.path</code>; the bot
+                        loads it at startup and reloads it whenever the setup
+                        changes. The <code>book.chaos</code> dial (0&nbsp;=&nbsp;mainline,
+                        1&nbsp;=&nbsp;uniform) controls how often off-beat
+                        moves get picked.
+                    </p>
                     <div
                         style="
                             display: flex;
                             align-items: center;
                             gap: 1rem;
-                            margin-bottom: 1rem;
+                            margin-top: 1rem;
                             flex-wrap: wrap;
                         "
                     >
-                        <span
-                            id="book-meta"
-                            class="muted"
-                            style="font-size: 0.85rem"
-                        ></span>
-                        <button class="btn" onclick="fetchBook()">
-                            Reload
-                        </button>
-                        <button
-                            class="btn"
-                            onclick="bookImport()"
-                            style="margin-left: auto"
-                        >
-                            Import curated (~24 lines)
-                        </button>
-                        <button
-                            class="btn btn-danger"
-                            onclick="bookClear()"
-                            style="margin-left: 0.5rem"
-                        >
-                            Clear book
-                        </button>
-                    </div>
-                    <div
-                        style="
-                            background: var(--bg-card);
-                            border-radius: 6px;
-                            padding: 1rem;
-                            margin-bottom: 1.2rem;
-                        "
-                    >
-                        <div style="font-weight: 600; margin-bottom: 0.6rem">
-                            Add line
-                        </div>
-                        <div
-                            style="display: flex; gap: 0.6rem; flex-wrap: wrap"
-                        >
-                            <input
-                                id="book-name"
-                                type="text"
-                                placeholder="Name (e.g. Italian Game)"
-                                style="
-                                    flex: 1;
-                                    min-width: 160px;
-                                    padding: 0.4rem 0.6rem;
-                                    border: 1px solid var(--border, #ccc);
-                                    border-radius: 4px;
-                                    background: var(--bg);
-                                    color: var(--text);
-                                "
-                            />
-                            <input
-                                id="book-moves"
-                                type="text"
-                                placeholder="Moves (e.g. e2e4 e7e5 g1f3)"
-                                style="
-                                    flex: 2;
-                                    min-width: 220px;
-                                    padding: 0.4rem 0.6rem;
-                                    border: 1px solid var(--border, #ccc);
-                                    border-radius: 4px;
-                                    background: var(--bg);
-                                    color: var(--text);
-                                "
-                            />
-                            <button class="btn" onclick="bookAddLine()">
-                                Add line
-                            </button>
-                        </div>
-                        <div
-                            id="book-fb"
-                            style="
-                                font-size: 0.83rem;
-                                margin-top: 0.4rem;
-                                color: var(--text-muted);
-                            "
-                        ></div>
-                    </div>
-                    <div id="book-entries">
-                        <span class="muted">Loading…</span>
+                        <span id="book-meta" class="muted" style="font-size: 0.85rem"></span>
+                        <button class="btn" onclick="fetchBook()">Refresh</button>
                     </div>
                 </div>
             </section>
@@ -2902,7 +2835,6 @@
             // ═══════════════════════════════════════════════════════════════
             // Opening Book
             // ═══════════════════════════════════════════════════════════════
-            let _bookData = null;
 
             // ═══════════════════════════════════════════════════════════════
             // Setups
@@ -3260,108 +3192,23 @@
             }
 
             async function fetchBook() {
+                const el = document.getElementById("book-meta");
+                if (!el) return;
                 try {
                     const d = await getJSON("/api/book");
-                    _bookData = d;
-                    renderBook(d);
-                } catch (e) {
-                    $("book-entries").innerHTML =
-                        `<span class="muted">Bot unreachable.</span>`;
-                }
-            }
-
-            function renderBook(d) {
-                $("book-meta").textContent =
-                    `${d.count ?? 0} position${(d.count ?? 0) === 1 ? "" : "s"}`;
-                if (!d.entries || !d.entries.length) {
-                    $("book-entries").innerHTML =
-                        '<span class="muted">Book is empty. Import curated lines or add your own.</span>';
-                    return;
-                }
-                // Group by label
-                const groups = {};
-                for (const entry of d.entries) {
-                    for (const m of entry.moves) {
-                        const lbl = m.label || "(unlabelled)";
-                        if (!groups[lbl]) groups[lbl] = [];
-                        groups[lbl].push({ hash: entry.hash, move: m.move });
+                    if (d.unreachable) {
+                        el.textContent = "Bot unreachable.";
+                        return;
                     }
-                }
-                const labels = Object.keys(groups).sort();
-                $("book-entries").innerHTML = labels
-                    .map(
-                        (lbl) => `
-                    <details open style="margin-bottom:.7rem">
-                        <summary style="cursor:pointer;font-weight:600;padding:.3rem 0">
-                            ${escapeHtml(lbl)} <span class="muted">(${groups[lbl].length} position${groups[lbl].length === 1 ? "" : "s"})</span>
-                        </summary>
-                        <table class="tbl" style="margin-top:.4rem">
-                            <tbody>${groups[lbl]
-                                .map(
-                                    (row) => `
-                                <tr>
-                                    <td class="mono" style="font-size:.8rem;color:var(--text-muted)">${row.hash.slice(-8)}</td>
-                                    <td class="mono"><strong>${escapeHtml(row.move)}</strong></td>
-                                    <td style="text-align:right">
-                                        <button class="btn btn-danger" style="padding:2px 8px;font-size:.8rem"
-                                            onclick="bookDelete('${escapeHtml(row.hash)}','${escapeHtml(row.move)}')">×</button>
-                                    </td>
-                                </tr>`,
-                                )
-                                .join("")}
-                            </tbody>
-                        </table>
-                    </details>`,
-                    )
-                    .join("");
-            }
-
-            async function bookAddLine() {
-                const name = $("book-name").value.trim();
-                const moves = $("book-moves").value.trim();
-                if (!name || !moves) {
-                    $("book-fb").textContent = "Name and moves are required.";
-                    return;
-                }
-                $("book-fb").textContent = "Adding…";
-                try {
-                    await postJSON("/api/book/line", { name, moves });
-                    $("book-fb").textContent = "Added.";
-                    $("book-name").value = "";
-                    $("book-moves").value = "";
-                    await fetchBook();
+                    const path = d.path || "(none)";
+                    const entries = d.entries ?? 0;
+                    if (!entries) {
+                        el.textContent = `No book loaded. Set book.path in your deployed setup.`;
+                    } else {
+                        el.textContent = `${entries.toLocaleString()} entries loaded from ${path}`;
+                    }
                 } catch (e) {
-                    $("book-fb").textContent = `Error: ${e.message}`;
-                }
-            }
-
-            async function bookDelete(hash, move) {
-                try {
-                    await postJSON("/api/book/entry/delete", { hash, move });
-                    await fetchBook();
-                } catch (e) {
-                    alert("Delete failed: " + e.message);
-                }
-            }
-
-            async function bookImport() {
-                if (!confirm("Merge ~24 curated opening lines into the book?"))
-                    return;
-                try {
-                    const r = await postJSON("/api/book/import", {});
-                    await fetchBook();
-                } catch (e) {
-                    alert("Import failed: " + e.message);
-                }
-            }
-
-            async function bookClear() {
-                if (!confirm("Clear the entire opening book?")) return;
-                try {
-                    await postJSON("/api/book/clear", {});
-                    await fetchBook();
-                } catch (e) {
-                    alert("Clear failed: " + e.message);
+                    el.textContent = "Bot unreachable.";
                 }
             }
 

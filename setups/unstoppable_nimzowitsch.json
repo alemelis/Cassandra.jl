@@ -1,0 +1,40 @@
+{
+  "created_at": "2026-05-14T11:19:24",
+  "search": {
+    "max_depth": 32,
+    "time_limit_s": 1,
+    "tt_size_log2": 25,
+    "qsearch": true,
+    "delta_pruning_margin_cp": 200,
+    "see_qsearch_threshold_cp": 0,
+    "check_extension": true,
+    "null_move_enabled": true,
+    "null_move_R": 3,
+    "null_move_min_depth": 4,
+    "lmr_enabled": true,
+    "lmr_min_depth": 3,
+    "lmr_min_move_idx": 4,
+    "lmr_reduction": 2,
+    "aspiration_window_cp": 75,
+    "time_strategy": 0,
+    "time_panic_threshold_ms": 1000,
+    "time_min_ms": 100,
+    "time_max_ms": 5000,
+    "time_critical_bonus": 1.5
+  },
+  "eval": {
+    "bishop_pair_cp": 30,
+    "rook_open_cp": 20,
+    "rook_semi_cp": 10
+  },
+  "ordering": {
+    "use_policy_logits": false,
+    "killers": true,
+    "history": true
+  },
+  "book": {
+    "enabled": true,
+    "max_ply": 16
+  },
+  "name": "unstoppable_nimzowitsch"
+}

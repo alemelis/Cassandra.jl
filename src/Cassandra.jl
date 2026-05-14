@@ -34,8 +34,8 @@ include("Search/SEE.jl")
 include("Search/TimeBudget.jl")
 include("Search/AlphaBeta.jl")
 
-# ── Opening book ─────────────────────────────────────────────────────────────
-include("Book.jl")
+# ── Opening book (polyglot .bin format) ──────────────────────────────────────
+include("PolyglotBook.jl")
 
 # ── Public API ───────────────────────────────────────────────────────────────
 # Position
@@ -54,6 +54,20 @@ export engine_cfg_to_dict, engine_cfg_from_dict, cfg_hash, ENGINE_CONFIG_SCHEMA
 export set_max_depth!, get_max_depth   # UCI shims
 
 # Opening book
-export Book
+export PolyglotBook
+
+# Auto-load the polyglot book referenced by the deployed engine config, if any.
+# Wrapped in try/catch — a bad path or unreadable file should warn, not crash
+# (the engine still works without a book).
+function __init__()
+    try
+        path = get_engine_cfg().book.path
+        if !isempty(path) && isfile(path)
+            PolyglotBook.load!(path)
+        end
+    catch e
+        @warn "[polyglot] auto-load failed" exception=e
+    end
+end
 
 end # module Cassandra

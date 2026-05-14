@@ -390,10 +390,10 @@ end
 function select_move(board::Bobby.Board;
                      time_budget_ms::Union{Nothing,Integer}=nothing)::Union{String,Nothing}
     cfg = get_engine_cfg()
-    if cfg.book.enabled && Book.enabled()
-        bm = Book.probe(board)
+    if cfg.book.enabled && PolyglotBook.enabled()
+        bm = PolyglotBook.probe(board, cfg.book)
         if bm !== nothing
-            @info "[book] hit" hash=string(board.hash) move=bm
+            @info "[book] hit" move=bm
             return bm
         end
     end

@@ -1,13 +1,13 @@
 {
-  "name": "swift_botvinnik",
-  "created_at": "2026-05-14T09:00:00",
+  "name": "chaotic_tal",
+  "created_at": "2026-05-14T15:30:00",
   "search": {
     "max_depth": 32,
     "time_limit_s": 1.0,
     "tt_size_log2": 20,
     "qsearch": true,
     "delta_pruning_margin_cp": 200,
-    "see_qsearch_threshold_cp": 0,
+    "see_qsearch_threshold_cp": -50,
     "check_extension": true,
     "null_move_enabled": true,
     "null_move_R": 2,
@@ -36,7 +36,7 @@
   "book": {
     "enabled": true,
     "path": "/data/setups/books/gm2001.bin",
-    "chaos": 0.0,
+    "chaos": 0.6,
     "max_ply": 20
   }
 }

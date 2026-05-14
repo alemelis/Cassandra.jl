@@ -545,10 +545,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             '/api/arena/stop':         self._handle_arena_stop,
             '/api/profile/run':        self._handle_profile_run,
             '/api/profile/stop':       self._handle_profile_stop,
-            '/api/book/line':          self._handle_book_add_line,
-            '/api/book/entry/delete':  self._handle_book_delete_entry,
-            '/api/book/import':        self._handle_book_import,
-            '/api/book/clear':         self._handle_book_clear,
             '/api/setups':             self._handle_setup_create,
         }
         h = routes.get(path)
@@ -750,35 +746,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except RuntimeError as e: self._json(409, {'ok': False, 'error': str(e)})
         except Exception as e:    self._json(500, {'ok': False, 'error': str(e)})
 
-    # ── Book proxy ───────────────────────────────────────────────────────────
+    # ── Book status (read-only) ──────────────────────────────────────────────
+    # The dashboard no longer manages the book directly — books are polyglot
+    # .bin files referenced by `book.path` in the deployed setup, loaded by
+    # the bot at startup. This endpoint just surfaces the current load status.
 
     def _handle_book_get(self):
-        self._json(200, self._bot_get('/book', {'count': 0, 'entries': [], 'unreachable': True}))
-
-    def _proxy_book(self, path):
-        if not _auth_ok(self.headers):
-            self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
-        try:
-            length = int(self.headers.get('Content-Length', 0))
-            body   = self.rfile.read(length) if length else b'{}'
-            self._json(200, self._bot_post(path, body))
-        except Exception as e:
-            self._json(502, {'ok': False, 'error': str(e)})
-
-    def _handle_book_add_line(self):     self._proxy_book('/book/line')
-    def _handle_book_delete_entry(self): self._proxy_book('/book/entry/delete')
-
-    def _handle_book_import(self):
-        if not _auth_ok(self.headers):
-            self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
-        try:    self._json(200, self._bot_post('/book/import'))
-        except Exception as e: self._json(502, {'ok': False, 'error': str(e)})
-
-    def _handle_book_clear(self):
-        if not _auth_ok(self.headers):
-            self._json(401, {'ok': False, 'error': 'Unauthorized'}); return
-        try:    self._json(200, self._bot_post('/book/clear'))
-        except Exception as e: self._json(502, {'ok': False, 'error': str(e)})
+        self._json(200, self._bot_get('/book', {'entries': 0, 'path': '', 'enabled': False, 'unreachable': True}))
 
     # ── Bot proxies ──────────────────────────────────────────────────────────
 

@@ -47,8 +47,10 @@ Base.@kwdef mutable struct OrderingConfig
 end
 
 Base.@kwdef mutable struct BookConfig
-    enabled::Bool  = true
-    max_ply::Int   = 16
+    enabled::Bool   = true
+    path::String    = ""        # polyglot .bin path; empty = no book
+    chaos::Float64  = 0.0       # 0 = mainline weighted sampling; 1 = uniform
+    max_ply::Int    = 20        # ignore book past this ply
 end
 
 Base.@kwdef mutable struct EngineConfig
@@ -90,6 +92,8 @@ const ENGINE_CONFIG_SCHEMA = Dict{String,Any}(
 
     "ordering.history"             => Dict("type"=>"bool",  "description"=>"Use history heuristic: prefer quiet moves with good historical cutoff record.", "doc"=>"search.md#move-ordering"),
     "book.enabled"                 => Dict("type"=>"bool",  "description"=>"Enable opening book lookups.", "doc"=>"search.md#opening-book"),
+    "book.path"                    => Dict("type"=>"string","description"=>"Path to a polyglot .bin opening book. Loaded at startup; empty = no book.", "doc"=>"search.md#opening-book"),
+    "book.chaos"                   => Dict("type"=>"float", "min"=>0.0, "max"=>1.0, "step"=>0.05, "description"=>"Sampling chaos: 0.0 = mainline (weight-proportional), 1.0 = uniform across all book entries for the position.", "doc"=>"search.md#opening-book"),
     "book.max_ply"                 => Dict("type"=>"int",   "min"=>0,  "max"=>40,   "step"=>2,   "description"=>"Maximum ply at which to consult the book.", "doc"=>"search.md#opening-book"),
 )
 
@@ -145,6 +149,8 @@ function engine_cfg_to_dict(cfg::EngineConfig)::Dict{String,Any}
         ),
         "book" => Dict{String,Any}(
             "enabled" => b.enabled,
+            "path"    => b.path,
+            "chaos"   => b.chaos,
             "max_ply" => b.max_ply,
         ),
     )
@@ -193,7 +199,9 @@ function engine_cfg_from_dict(d::Dict)::EngineConfig
         ),
         book = BookConfig(
             enabled = get(b, "enabled", true),
-            max_ply = get(b, "max_ply", 16),
+            path    = string(get(b, "path",    "")),
+            chaos   = Float64(get(b, "chaos",   0.0)),
+            max_ply = Int(get(b, "max_ply", 20)),
         ),
     )
 end

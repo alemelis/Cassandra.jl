@@ -110,6 +110,23 @@ function load_engine_setup!()
         end
         @info "[setup] No deployed.json — using defaults, wrote $path"
     end
+
+    # (Re)load the polyglot book referenced by this setup. Empty path = no book.
+    # Failures warn but don't crash — the engine still plays without a book.
+    book_path = Cassandra.get_engine_cfg().book.path
+    try
+        if isempty(book_path)
+            empty!(Cassandra.PolyglotBook.ENTRIES)
+            @info "[polyglot] no book path configured"
+        elseif !isfile(book_path)
+            empty!(Cassandra.PolyglotBook.ENTRIES)
+            @warn "[polyglot] book file not found" path=book_path
+        else
+            Cassandra.PolyglotBook.load!(book_path)
+        end
+    catch e
+        @warn "[polyglot] load failed" path=book_path exception=e
+    end
 end
 
 current_setup_meta() = lock(SETUP_LOCK) do; copy(SETUP_META[]); end
@@ -638,6 +655,15 @@ function start_control_server()
             lock(SETUP_LOCK) do
                 SETUP_META[] = Dict{String,Any}("name" => cfg.name, "hash" => Cassandra.cfg_hash(cfg))
             end
+            # Reload polyglot if the book path changed
+            try
+                bp = cfg.book.path
+                if !isempty(bp) && isfile(bp) && Cassandra.PolyglotBook.loaded_path() != bp
+                    Cassandra.PolyglotBook.load!(bp)
+                end
+            catch e
+                @warn "[polyglot] reload on config change failed" exception=e
+            end
             HTTP.Response(200, ["Content-Type" => "application/json"],
                 JSON3.write(Cassandra.engine_cfg_to_dict(cfg)))
         catch e
@@ -646,52 +672,12 @@ function start_control_server()
     end)
 
     HTTP.register!(router, "GET", "/book", function(req)
-        entries = Cassandra.Book.list_entries()
         body = JSON3.write((
-            count   = length(entries),
-            path    = Cassandra.Book.BOOK_PATH[],
-            entries = [(hash=e.hash, moves=e.moves) for e in entries],
+            entries = length(Cassandra.PolyglotBook.ENTRIES),
+            path    = Cassandra.PolyglotBook.loaded_path(),
+            enabled = Cassandra.PolyglotBook.enabled(),
         ))
         HTTP.Response(200, ["Content-Type" => "application/json"], body)
-    end)
-
-    HTTP.register!(router, "POST", "/book/line", function(req)
-        try
-            data = JSON3.read(String(req.body))
-            Cassandra.Book.add_line!(String(data.name), String(data.moves))
-            Cassandra.Book.save!()
-            HTTP.Response(200, "{\"ok\":true}")
-        catch e
-            HTTP.Response(400, "{\"error\":\"$(e)\"}")
-        end
-    end)
-
-    HTTP.register!(router, "POST", "/book/entry/delete", function(req)
-        try
-            data = JSON3.read(String(req.body))
-            Cassandra.Book.delete_entry!(String(data.hash), String(data.move))
-            Cassandra.Book.save!()
-            HTTP.Response(200, "{\"ok\":true}")
-        catch e
-            HTTP.Response(400, "{\"error\":\"$(e)\"}")
-        end
-    end)
-
-    HTTP.register!(router, "POST", "/book/import", function(req)
-        try
-            Cassandra.Book.import_curated!()
-            Cassandra.Book.save!()
-            n = length(Cassandra.Book.list_entries())
-            HTTP.Response(200, "{\"ok\":true,\"count\":$n}")
-        catch e
-            HTTP.Response(500, "{\"error\":\"$(e)\"}")
-        end
-    end)
-
-    HTTP.register!(router, "POST", "/book/clear", function(req)
-        Cassandra.Book.clear!()
-        Cassandra.Book.save!()
-        HTTP.Response(200, "{\"ok\":true}")
     end)
 
     @async HTTP.serve(router, "0.0.0.0", CONTROL_PORT; verbose=false)
