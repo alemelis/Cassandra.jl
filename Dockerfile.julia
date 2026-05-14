@@ -19,4 +19,3 @@ RUN julia --project=. -e 'using Cassandra'
 
 # Runtime files (excludes Project.toml/Manifest.toml on purpose).
 COPY Cassandra.jl/bot/ bot/
-COPY Cassandra.jl/book/ book/
